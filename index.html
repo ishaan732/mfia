@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chit Mafia Online</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="setup-panel" id="homePanel">
+        <div class="brand-row">
+          <span class="mark">CM</span>
+          <div>
+            <p class="eyebrow">Online hidden-role rooms</p>
+            <h1>Chit Mafia</h1>
+          </div>
+        </div>
+
+        <div class="online-grid">
+          <form id="createForm" class="setup-form">
+            <div class="section-title">
+              <h2>Create Room</h2>
+            </div>
+
+            <label class="field">
+              <span>Your Name</span>
+              <input id="hostName" type="text" maxlength="24" value="Host" autocomplete="name" />
+            </label>
+
+            <label class="field">
+              <span>Max Players</span>
+              <input id="playerCount" type="number" min="1" max="10" value="6" />
+            </label>
+
+            <div class="role-grid" aria-label="Role counts">
+              <label class="field">
+                <span>Mafia</span>
+                <input id="mafiaCount" type="number" min="0" max="10" value="1" />
+              </label>
+              <label class="field">
+                <span>Detective</span>
+                <input id="detectiveCount" type="number" min="0" max="1" value="1" />
+              </label>
+              <label class="field">
+                <span>Doctor</span>
+                <input id="doctorCount" type="number" min="0" max="1" value="1" />
+              </label>
+            </div>
+
+            <button type="submit" class="primary-button">Create Online Room</button>
+          </form>
+
+          <form id="joinForm" class="setup-form">
+            <div class="section-title">
+              <h2>Join Room</h2>
+            </div>
+
+            <label class="field">
+              <span>Your Name</span>
+              <input id="joinName" type="text" maxlength="24" value="Player" autocomplete="name" />
+            </label>
+
+            <label class="field">
+              <span>Room Code</span>
+              <input id="joinCode" type="text" maxlength="6" placeholder="AB12CD" autocomplete="off" />
+            </label>
+
+            <button type="submit" class="secondary-button">Join With Code</button>
+          </form>
+        </div>
+
+        <p class="error-message" id="errorMessage" role="alert"></p>
+      </section>
+
+      <section class="game-panel hidden" id="gamePanel">
+        <div class="game-header">
+          <div>
+            <p class="eyebrow" id="roomKicker">Room</p>
+            <h1 id="roomTitle">Lobby</h1>
+          </div>
+          <button type="button" class="ghost-button" id="leaveRoom">Leave</button>
+        </div>
+
+        <div class="share-band">
+          <label class="field">
+            <span>Invite Link</span>
+            <input id="inviteLink" type="text" readonly />
+          </label>
+          <button type="button" class="ghost-button" id="copyInvite">Copy</button>
+        </div>
+
+        <div class="status-strip">
+          <div>
+            <span id="joinedCount">0</span>
+            <small>joined</small>
+          </div>
+          <div>
+            <span id="seenCount">0</span>
+            <small>seen</small>
+          </div>
+          <div>
+            <span id="roomCode">----</span>
+            <small>room code</small>
+          </div>
+        </div>
+
+        <div class="instruction-band" id="instructionBand">
+          Waiting for players. The host starts once everyone has joined.
+        </div>
+
+        <div class="host-actions hidden" id="hostActions">
+          <button type="button" class="primary-button" id="startGame">Start And Pass Chits</button>
+          <button type="button" class="ghost-button" id="resetGame">Reset Chits</button>
+        </div>
+
+        <div id="playerCards" class="player-cards"></div>
+
+        <section class="my-chit-panel hidden" id="myChitPanel">
+          <p class="eyebrow" id="myName">Your chit</p>
+          <div class="chit-card" id="chitCard">
+            <span class="role-icon" id="roleIcon">?</span>
+            <h2 id="roleName">Hidden</h2>
+            <p id="roleHint">Reveal only when nobody else can see your screen.</p>
+          </div>
+          <button type="button" class="primary-button" id="revealChit">Reveal My Chit</button>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
