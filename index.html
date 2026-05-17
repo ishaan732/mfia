@@ -70,6 +70,19 @@
           </form>
         </div>
 
+        <section class="info-panel">
+          <div class="section-title">
+            <h2>How To Play</h2>
+          </div>
+          <ol class="how-list">
+            <li>Create a room and share the invite link.</li>
+            <li>Everyone joins with their own name on their own device.</li>
+            <li>The host starts the game and chits are secretly assigned.</li>
+            <li>Each player reveals only their own chit.</li>
+            <li>Use chat or voice to discuss, then vote out suspected Mafia.</li>
+          </ol>
+        </section>
+
         <p class="error-message" id="errorMessage" role="alert"></p>
       </section>
 
@@ -116,14 +129,44 @@
 
         <div id="playerCards" class="player-cards"></div>
 
-        <section class="my-chit-panel hidden" id="myChitPanel">
-          <p class="eyebrow" id="myName">Your chit</p>
-          <div class="chit-card" id="chitCard">
-            <span class="role-icon" id="roleIcon">?</span>
-            <h2 id="roleName">Hidden</h2>
-            <p id="roleHint">Reveal only when nobody else can see your screen.</p>
+        <div class="room-tools">
+          <section class="my-chit-panel hidden" id="myChitPanel">
+            <p class="eyebrow" id="myName">Your chit</p>
+            <div class="chit-card" id="chitCard">
+              <span class="role-icon" id="roleIcon">?</span>
+              <h2 id="roleName">Hidden</h2>
+              <p id="roleHint">Reveal only when nobody else can see your screen.</p>
+            </div>
+            <button type="button" class="primary-button" id="revealChit">Reveal My Chit</button>
+          </section>
+
+          <section class="info-panel">
+            <div class="section-title">
+              <h2>How To Play</h2>
+            </div>
+            <ol class="how-list">
+              <li>Mafia wins by staying hidden until they control the vote.</li>
+              <li>Civilians win by finding and voting out all Mafia.</li>
+              <li>Detective can ask the host to privately check one player each night.</li>
+              <li>Doctor can ask the host to privately protect one player each night.</li>
+              <li>Keep your chit secret unless your group agrees otherwise.</li>
+            </ol>
+          </section>
+        </div>
+
+        <section class="chat-panel">
+          <div class="section-title">
+            <h2>Chat Mode</h2>
+            <span class="chat-count" id="chatCount">0 messages</span>
           </div>
-          <button type="button" class="primary-button" id="revealChit">Reveal My Chit</button>
+          <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+          <form id="chatForm" class="chat-form">
+            <label class="field">
+              <span>Message</span>
+              <input id="chatInput" type="text" maxlength="160" placeholder="Type to the room" autocomplete="off" />
+            </label>
+            <button type="submit" class="primary-button">Send</button>
+          </form>
         </section>
       </section>
     </main>

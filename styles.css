@@ -148,6 +148,7 @@ input:focus {
 .online-grid {
   grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
   align-items: start;
+  margin-bottom: 18px;
 }
 
 .names-block {
@@ -243,7 +244,8 @@ input:focus {
 }
 
 .share-band,
-.host-actions {
+.host-actions,
+.chat-form {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 12px;
@@ -258,6 +260,37 @@ input:focus {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px;
+}
+
+.room-tools {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.info-panel,
+.chat-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 18px;
+}
+
+.how-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.how-list li::marker {
+  color: var(--accent);
+  font-weight: 900;
 }
 
 .player-card {
@@ -324,6 +357,66 @@ input:focus {
   border-radius: 8px;
   background: #fff;
   padding: 18px;
+}
+
+.chat-count {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.chat-messages {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 210px;
+  max-height: 310px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  padding: 12px;
+}
+
+.chat-message {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(23, 32, 29, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.chat-message.mine {
+  border-color: rgba(39, 107, 88, 0.25);
+  background: rgba(39, 107, 88, 0.08);
+}
+
+.chat-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.chat-meta strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.chat-message p,
+.empty-chat {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.empty-chat {
+  color: var(--muted);
+  font-weight: 750;
 }
 
 .hidden {
@@ -405,8 +498,10 @@ input:focus {
   .role-grid,
   .name-fields,
   .online-grid,
+  .room-tools,
   .share-band,
   .host-actions,
+  .chat-form,
   .status-strip {
     grid-template-columns: 1fr;
   }

@@ -30,6 +30,10 @@ const roleIcon = document.querySelector("#roleIcon");
 const roleName = document.querySelector("#roleName");
 const roleHint = document.querySelector("#roleHint");
 const revealChit = document.querySelector("#revealChit");
+const chatCount = document.querySelector("#chatCount");
+const chatMessages = document.querySelector("#chatMessages");
+const chatForm = document.querySelector("#chatForm");
+const chatInput = document.querySelector("#chatInput");
 
 const ROLE_DETAILS = {
   Mafia: {
@@ -56,6 +60,7 @@ const ROLE_DETAILS = {
 
 let session = JSON.parse(localStorage.getItem("chitMafiaSession") || "null");
 let pollId = null;
+let lastMessageId = "";
 
 function clampNumber(input, min, max) {
   const value = Number.parseInt(input.value, 10);
@@ -136,6 +141,53 @@ function renderHiddenChit() {
   revealChit.textContent = "Reveal My Chit";
 }
 
+function renderChat(messages = []) {
+  const shouldStickToBottom =
+    chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 60;
+  const newestMessage = messages.at(-1)?.id || "";
+
+  chatCount.textContent = `${messages.length} ${messages.length === 1 ? "message" : "messages"}`;
+  chatMessages.innerHTML = "";
+
+  if (messages.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-chat";
+    empty.textContent = "No chat messages yet.";
+    chatMessages.append(empty);
+    lastMessageId = "";
+    return;
+  }
+
+  messages.forEach((message) => {
+    const item = document.createElement("article");
+    item.className = `chat-message${message.isMe ? " mine" : ""}`;
+
+    const meta = document.createElement("div");
+    meta.className = "chat-meta";
+
+    const name = document.createElement("strong");
+    name.textContent = message.isMe ? `${message.name} (you)` : message.name;
+
+    const time = document.createElement("span");
+    time.textContent = new Date(message.createdAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const text = document.createElement("p");
+    text.textContent = message.text;
+
+    meta.append(name, time);
+    item.append(meta, text);
+    chatMessages.append(item);
+  });
+
+  if (shouldStickToBottom || newestMessage !== lastMessageId) {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+  lastMessageId = newestMessage;
+}
+
 function renderRoom(room) {
   const me = room.players.find((player) => player.isMe);
   const isHost = me?.isHost;
@@ -166,6 +218,8 @@ function renderRoom(room) {
   } else {
     renderHiddenChit();
   }
+
+  renderChat(room.messages);
 
   playerCards.innerHTML = "";
   room.players.forEach((player, index) => {
@@ -288,6 +342,27 @@ revealChit.addEventListener("click", async () => {
     await refreshRoom();
   } catch (error) {
     instructionBand.textContent = error.message;
+  }
+});
+
+chatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = chatInput.value.trim();
+  if (!message || !session) return;
+
+  chatInput.value = "";
+  try {
+    const room = await requestJson(`/api/rooms/${session.code}/messages`, {
+      method: "POST",
+      body: JSON.stringify({
+        token: session.token,
+        message,
+      }),
+    });
+    renderRoom(room);
+  } catch (error) {
+    instructionBand.textContent = error.message;
+    chatInput.value = message;
   }
 });
 

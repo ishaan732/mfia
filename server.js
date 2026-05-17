@@ -60,6 +60,10 @@ function cleanName(name, fallback) {
   return String(name || fallback).trim().slice(0, 24) || fallback;
 }
 
+function cleanMessage(message) {
+  return String(message || "").trim().replace(/\s+/g, " ").slice(0, 160);
+}
+
 function clamp(value, min, max) {
   const number = Number.parseInt(value, 10);
   return Math.min(max, Math.max(min, Number.isFinite(number) ? number : min));
@@ -91,6 +95,13 @@ function serializeRoom(room, token) {
       seen: roomPlayer.seen,
       isHost: roomPlayer.id === room.hostId,
       isMe: roomPlayer.token === token,
+    })),
+    messages: (room.messages || []).map((message) => ({
+      id: message.id,
+      name: message.name,
+      text: message.text,
+      createdAt: message.createdAt,
+      isMe: message.playerId === player?.id,
     })),
   };
 }
@@ -156,6 +167,7 @@ async function handleApi(request, response) {
           doctor: clamp(body.roles?.doctor, 0, 1),
         },
         players: [],
+        messages: [],
         hostId: "",
         started: false,
         createdAt: Date.now(),
@@ -262,6 +274,25 @@ async function handleApi(request, response) {
         }
         player.seen = true;
         sendJson(response, 200, { role: player.role });
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "messages") {
+        const text = cleanMessage(body.message);
+        if (!text) {
+          sendJson(response, 400, { error: "Message cannot be empty." });
+          return;
+        }
+        if (!room.messages) room.messages = [];
+        room.messages.push({
+          id: crypto.randomUUID(),
+          playerId: player.id,
+          name: player.name,
+          text,
+          createdAt: Date.now(),
+        });
+        room.messages = room.messages.slice(-80);
+        sendJson(response, 201, serializeRoom(room, player.token));
         return;
       }
     }
