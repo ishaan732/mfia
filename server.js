@@ -82,17 +82,113 @@ function findPlayer(room, token) {
   return room.players.find((player) => player.token === token);
 }
 
+function alivePlayers(room) {
+  return room.players.filter((player) => player.alive);
+}
+
+function playerName(room, playerId) {
+  return room.players.find((player) => player.id === playerId)?.name || "Nobody";
+}
+
+function addSystemMessage(room, text) {
+  if (!room.messages) room.messages = [];
+  room.messages.push({
+    id: crypto.randomUUID(),
+    playerId: "system",
+    name: "Game",
+    text,
+    createdAt: Date.now(),
+  });
+  room.messages = room.messages.slice(-80);
+}
+
+function newNightState() {
+  return {
+    mafiaTargetId: null,
+    doctorTargetId: null,
+    detectiveChecks: {},
+  };
+}
+
+function clearRoundActions(room) {
+  room.night = newNightState();
+  room.votes = {};
+}
+
+function checkWinner(room) {
+  const alive = alivePlayers(room);
+  const mafiaCount = alive.filter((player) => player.role === "Mafia").length;
+  const townCount = alive.length - mafiaCount;
+
+  if (mafiaCount === 0) return "Civilians";
+  if (mafiaCount >= townCount) return "Mafia";
+  return null;
+}
+
+function endIfWon(room) {
+  const winner = checkWinner(room);
+  if (!winner) return false;
+
+  room.phase = "ended";
+  room.winner = winner;
+  addSystemMessage(room, `${winner} win the game.`);
+  return true;
+}
+
+function requireHost(room, player) {
+  if (player.id !== room.hostId) {
+    throw new Error("Only the host can do that.");
+  }
+}
+
+function requirePhase(room, phase) {
+  if (room.phase !== phase) {
+    throw new Error(`This action is only available during ${phase}.`);
+  }
+}
+
+function livingTarget(room, targetId) {
+  return room.players.find((player) => player.id === targetId && player.alive);
+}
+
 function serializeRoom(room, token) {
   const player = findPlayer(room, token);
+  const myDetectiveCheck = player ? room.night?.detectiveChecks?.[player.id] : null;
+  const mafiaTarget = room.night?.mafiaTargetId;
+  const doctorTarget = room.night?.doctorTargetId;
+
   return {
     code: room.code,
     maxPlayers: room.maxPlayers,
     started: room.started,
+    phase: room.phase || (room.started ? "night" : "lobby"),
+    round: room.round || 0,
+    winner: room.winner || null,
     myRole: player?.seen ? player.role : null,
+    myAlive: player?.alive ?? true,
+    myVoteTargetId: player ? room.votes?.[player.id] || null : null,
+    myNightAction: player
+      ? {
+          mafiaSubmitted: player.role === "Mafia" ? Boolean(mafiaTarget) : false,
+          doctorSubmitted: player.role === "Doctor" ? Boolean(doctorTarget) : false,
+          detectiveResult: myDetectiveCheck
+            ? {
+                targetName: playerName(room, myDetectiveCheck.targetId),
+                alignment: myDetectiveCheck.alignment,
+              }
+            : null,
+        }
+      : null,
+    mafiaTeam: player?.role === "Mafia" && player.seen
+      ? room.players
+          .filter((roomPlayer) => roomPlayer.role === "Mafia")
+          .map((roomPlayer) => roomPlayer.name)
+      : [],
     players: room.players.map((roomPlayer) => ({
       id: roomPlayer.id,
       name: roomPlayer.name,
       seen: roomPlayer.seen,
+      alive: roomPlayer.alive ?? true,
       isHost: roomPlayer.id === room.hostId,
       isMe: roomPlayer.token === token,
     })),
@@ -170,6 +266,11 @@ async function handleApi(request, response) {
         messages: [],
         hostId: "",
         started: false,
+        phase: "lobby",
+        round: 0,
+        winner: null,
+        night: newNightState(),
+        votes: {},
         createdAt: Date.now(),
       };
       const player = {
@@ -178,6 +279,7 @@ async function handleApi(request, response) {
         token: makeToken(),
         role: null,
         seen: false,
+        alive: true,
       };
       room.hostId = player.id;
       room.players.push(player);
@@ -225,6 +327,7 @@ async function handleApi(request, response) {
           token: makeToken(),
           role: null,
           seen: false,
+          alive: true,
         };
         room.players.push(player);
         sendJson(response, 201, { code: room.code, token: player.token });
@@ -247,8 +350,14 @@ async function handleApi(request, response) {
         room.players.forEach((roomPlayer, index) => {
           roomPlayer.role = roles[index];
           roomPlayer.seen = false;
+          roomPlayer.alive = true;
         });
         room.started = true;
+        room.phase = "night";
+        room.round = 1;
+        room.winner = null;
+        clearRoundActions(room);
+        addSystemMessage(room, "Round 1 night has begun. Mafia, Detective, and Doctor can act.");
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
       }
@@ -259,10 +368,16 @@ async function handleApi(request, response) {
           return;
         }
         room.started = false;
+        room.phase = "lobby";
+        room.round = 0;
+        room.winner = null;
+        clearRoundActions(room);
         room.players.forEach((roomPlayer) => {
           roomPlayer.role = null;
           roomPlayer.seen = false;
+          roomPlayer.alive = true;
         });
+        room.messages = [];
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
       }
@@ -274,6 +389,166 @@ async function handleApi(request, response) {
         }
         player.seen = true;
         sendJson(response, 200, { role: player.role });
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "night-action") {
+        if (room.phase !== "night") {
+          sendJson(response, 409, { error: "Night actions are only available at night." });
+          return;
+        }
+        if (!player.alive) {
+          sendJson(response, 409, { error: "Eliminated players cannot act." });
+          return;
+        }
+        if (!player.seen) {
+          sendJson(response, 409, { error: "Reveal your chit before taking a role action." });
+          return;
+        }
+
+        const target = livingTarget(room, body.targetId);
+        if (!target) {
+          sendJson(response, 400, { error: "Choose a living player." });
+          return;
+        }
+        if (!room.night) room.night = newNightState();
+
+        if (player.role === "Mafia") {
+          if (target.role === "Mafia") {
+            sendJson(response, 400, { error: "Mafia must choose a non-Mafia target." });
+            return;
+          }
+          room.night.mafiaTargetId = target.id;
+          addSystemMessage(room, "Mafia have chosen their target.");
+          sendJson(response, 200, serializeRoom(room, player.token));
+          return;
+        }
+
+        if (player.role === "Detective") {
+          room.night.detectiveChecks[player.id] = {
+            targetId: target.id,
+            alignment: target.role === "Mafia" ? "Mafia" : "Not Mafia",
+          };
+          sendJson(response, 200, serializeRoom(room, player.token));
+          return;
+        }
+
+        if (player.role === "Doctor") {
+          room.night.doctorTargetId = target.id;
+          addSystemMessage(room, "Doctor has protected someone.");
+          sendJson(response, 200, serializeRoom(room, player.token));
+          return;
+        }
+
+        sendJson(response, 400, { error: "Your role does not have a night action." });
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "resolve-night") {
+        if (player.id !== room.hostId) {
+          sendJson(response, 403, { error: "Only the host can resolve the night." });
+          return;
+        }
+        if (room.phase !== "night") {
+          sendJson(response, 409, { error: "The game is not in the night phase." });
+          return;
+        }
+
+        const target = livingTarget(room, room.night?.mafiaTargetId);
+        const protectedId = room.night?.doctorTargetId;
+        if (target && target.id !== protectedId) {
+          target.alive = false;
+          addSystemMessage(room, `${target.name} was eliminated during the night.`);
+        } else if (target && target.id === protectedId) {
+          addSystemMessage(room, "Nobody was eliminated. The Doctor protected the target.");
+        } else {
+          addSystemMessage(room, "Nobody was eliminated during the night.");
+        }
+
+        if (!endIfWon(room)) {
+          room.phase = "day";
+          addSystemMessage(room, "Day discussion has begun. Talk it out, then the host can start voting.");
+        }
+        sendJson(response, 200, serializeRoom(room, player.token));
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "start-vote") {
+        if (player.id !== room.hostId) {
+          sendJson(response, 403, { error: "Only the host can start voting." });
+          return;
+        }
+        if (room.phase !== "day") {
+          sendJson(response, 409, { error: "Voting can only start during the day." });
+          return;
+        }
+        room.phase = "vote";
+        room.votes = {};
+        addSystemMessage(room, "Voting has started. Alive players should vote for one suspect.");
+        sendJson(response, 200, serializeRoom(room, player.token));
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "vote") {
+        if (room.phase !== "vote") {
+          sendJson(response, 409, { error: "Voting is not open right now." });
+          return;
+        }
+        if (!player.alive) {
+          sendJson(response, 409, { error: "Eliminated players cannot vote." });
+          return;
+        }
+        const target = livingTarget(room, body.targetId);
+        if (!target) {
+          sendJson(response, 400, { error: "Choose a living player." });
+          return;
+        }
+        if (target.id === player.id) {
+          sendJson(response, 400, { error: "You cannot vote for yourself." });
+          return;
+        }
+        if (!room.votes) room.votes = {};
+        room.votes[player.id] = target.id;
+        sendJson(response, 200, serializeRoom(room, player.token));
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "resolve-vote") {
+        if (player.id !== room.hostId) {
+          sendJson(response, 403, { error: "Only the host can resolve voting." });
+          return;
+        }
+        if (room.phase !== "vote") {
+          sendJson(response, 409, { error: "The game is not in the voting phase." });
+          return;
+        }
+
+        const tallies = new Map();
+        for (const voter of alivePlayers(room)) {
+          const targetId = room.votes?.[voter.id];
+          if (livingTarget(room, targetId)) {
+            tallies.set(targetId, (tallies.get(targetId) || 0) + 1);
+          }
+        }
+
+        const ranked = [...tallies.entries()].sort((left, right) => right[1] - left[1]);
+        if (ranked.length === 0) {
+          addSystemMessage(room, "No valid votes were cast. Nobody was eliminated.");
+        } else if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) {
+          addSystemMessage(room, "The vote was tied. Nobody was eliminated.");
+        } else {
+          const eliminated = livingTarget(room, ranked[0][0]);
+          eliminated.alive = false;
+          addSystemMessage(room, `${eliminated.name} was voted out with ${ranked[0][1]} vote(s).`);
+        }
+
+        if (!endIfWon(room)) {
+          room.round = (room.round || 1) + 1;
+          room.phase = "night";
+          clearRoundActions(room);
+          addSystemMessage(room, `Round ${room.round} night has begun.`);
+        }
+        sendJson(response, 200, serializeRoom(room, player.token));
         return;
       }
 

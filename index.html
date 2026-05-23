@@ -78,8 +78,8 @@
             <li>Create a room and share the invite link.</li>
             <li>Everyone joins with their own name on their own device.</li>
             <li>The host starts the game and chits are secretly assigned.</li>
-            <li>Each player reveals only their own chit.</li>
-            <li>Use chat or voice to discuss, then vote out suspected Mafia.</li>
+            <li>Night actions, discussion, voting, and eliminations happen in the app.</li>
+            <li>Civilians win by voting out all Mafia. Mafia wins when they control the vote.</li>
           </ol>
         </section>
 
@@ -124,6 +124,9 @@
 
         <div class="host-actions hidden" id="hostActions">
           <button type="button" class="primary-button" id="startGame">Start And Pass Chits</button>
+          <button type="button" class="primary-button hidden" id="resolveNight">Resolve Night</button>
+          <button type="button" class="primary-button hidden" id="startVote">Start Vote</button>
+          <button type="button" class="primary-button hidden" id="resolveVote">Resolve Vote</button>
           <button type="button" class="ghost-button" id="resetGame">Reset Chits</button>
         </div>
 
@@ -147,12 +150,20 @@
             <ol class="how-list">
               <li>Mafia wins by staying hidden until they control the vote.</li>
               <li>Civilians win by finding and voting out all Mafia.</li>
-              <li>Detective can ask the host to privately check one player each night.</li>
-              <li>Doctor can ask the host to privately protect one player each night.</li>
-              <li>Keep your chit secret unless your group agrees otherwise.</li>
+              <li>At night, Mafia attacks, Detective checks, and Doctor protects.</li>
+              <li>During the day, everyone discusses what happened.</li>
+              <li>During voting, alive players vote one player out.</li>
             </ol>
           </section>
         </div>
+
+        <section class="action-panel hidden" id="actionPanel">
+          <div class="section-title">
+            <h2 id="actionTitle">Game Action</h2>
+            <span class="chat-count" id="phaseLabel">Round 1</span>
+          </div>
+          <div id="actionBody" class="action-body"></div>
+        </section>
 
         <section class="chat-panel">
           <div class="section-title">

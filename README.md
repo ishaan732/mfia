@@ -41,3 +41,12 @@ Render settings if you create a normal Web Service instead of a Blueprint:
 ## Privacy Model
 
 Roles are assigned and stored on the server. The room list shows only player names and whether a chit has been seen. A player receives their role only after calling reveal with their private player token saved in their browser.
+
+## Game Loop
+
+After the host starts, the app runs the Mafia flow:
+
+- Night: Mafia attacks, Detective checks, Doctor protects.
+- Day: everyone discusses in chat.
+- Vote: alive players vote one player out.
+- The app marks eliminated players and announces when Mafia or Civilians win.

@@ -20,6 +20,9 @@ const roomCode = document.querySelector("#roomCode");
 const instructionBand = document.querySelector("#instructionBand");
 const hostActions = document.querySelector("#hostActions");
 const startGame = document.querySelector("#startGame");
+const resolveNight = document.querySelector("#resolveNight");
+const startVote = document.querySelector("#startVote");
+const resolveVote = document.querySelector("#resolveVote");
 const resetGame = document.querySelector("#resetGame");
 const leaveRoom = document.querySelector("#leaveRoom");
 const playerCards = document.querySelector("#playerCards");
@@ -34,6 +37,10 @@ const chatCount = document.querySelector("#chatCount");
 const chatMessages = document.querySelector("#chatMessages");
 const chatForm = document.querySelector("#chatForm");
 const chatInput = document.querySelector("#chatInput");
+const actionPanel = document.querySelector("#actionPanel");
+const actionTitle = document.querySelector("#actionTitle");
+const actionBody = document.querySelector("#actionBody");
+const phaseLabel = document.querySelector("#phaseLabel");
 
 const ROLE_DETAILS = {
   Mafia: {
@@ -188,26 +195,193 @@ function renderChat(messages = []) {
   lastMessageId = newestMessage;
 }
 
+function phaseName(phase) {
+  return {
+    lobby: "Lobby",
+    night: "Night",
+    day: "Day",
+    vote: "Voting",
+    ended: "Game Over",
+  }[phase] || "Room";
+}
+
+function createPlayerSelect(players, filterPlayer, selectedId = "") {
+  const select = document.createElement("select");
+  select.name = "targetId";
+  select.required = true;
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Choose a player";
+  select.append(placeholder);
+
+  players.filter(filterPlayer).forEach((player) => {
+    const option = document.createElement("option");
+    option.value = player.id;
+    option.textContent = player.isMe ? `${player.name} (you)` : player.name;
+    option.selected = player.id === selectedId;
+    select.append(option);
+  });
+
+  return select;
+}
+
+function addActionText(text) {
+  const paragraph = document.createElement("p");
+  paragraph.className = "action-text";
+  paragraph.textContent = text;
+  actionBody.append(paragraph);
+}
+
+function renderActionForm({ buttonText, endpoint, players, filterPlayer, selectedId, extraText }) {
+  if (extraText) addActionText(extraText);
+
+  const form = document.createElement("form");
+  form.className = "action-form";
+  const select = createPlayerSelect(players, filterPlayer, selectedId);
+  const button = document.createElement("button");
+  button.type = "submit";
+  button.className = "primary-button";
+  button.textContent = buttonText;
+
+  form.append(select, button);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const room = await requestJson(`/api/rooms/${session.code}/${endpoint}`, {
+        method: "POST",
+        body: JSON.stringify({
+          token: session.token,
+          targetId: select.value,
+        }),
+      });
+      renderRoom(room);
+    } catch (error) {
+      instructionBand.textContent = error.message;
+    }
+  });
+  actionBody.append(form);
+}
+
+function renderActionPanel(room, me) {
+  actionBody.innerHTML = "";
+  actionPanel.classList.toggle("hidden", !room.started || !me);
+  if (!room.started || !me) return;
+
+  const phase = room.phase || "night";
+  actionTitle.textContent = phase === "ended" ? "Game Over" : `${phaseName(phase)} Action`;
+  phaseLabel.textContent = phase === "ended" ? room.winner || "Finished" : `Round ${room.round || 1}`;
+
+  if (phase === "ended") {
+    addActionText(`${room.winner} win. The host can reset chits to play again.`);
+    return;
+  }
+
+  if (!me.alive) {
+    addActionText("You have been eliminated. You can still watch and chat, but you cannot act or vote.");
+    return;
+  }
+
+  if (!room.myRole) {
+    addActionText("Reveal your chit before taking game actions.");
+    return;
+  }
+
+  if (phase === "night") {
+    if (room.myRole === "Mafia") {
+      const team = room.mafiaTeam.length > 1 ? ` Your Mafia team: ${room.mafiaTeam.join(", ")}.` : "";
+      renderActionForm({
+        buttonText: room.myNightAction?.mafiaSubmitted ? "Change Target" : "Choose Target",
+        endpoint: "night-action",
+        players: room.players,
+        filterPlayer: (player) => player.alive && !room.mafiaTeam.includes(player.name),
+        extraText: `Pick one non-Mafia player to attack.${team}`,
+      });
+      return;
+    }
+
+    if (room.myRole === "Detective") {
+      const result = room.myNightAction?.detectiveResult;
+      renderActionForm({
+        buttonText: result ? "Check Someone Else" : "Check Player",
+        endpoint: "night-action",
+        players: room.players,
+        filterPlayer: (player) => player.alive && !player.isMe,
+        extraText: result
+          ? `${result.targetName} is ${result.alignment}.`
+          : "Choose one living player to secretly investigate.",
+      });
+      return;
+    }
+
+    if (room.myRole === "Doctor") {
+      renderActionForm({
+        buttonText: room.myNightAction?.doctorSubmitted ? "Change Protection" : "Protect Player",
+        endpoint: "night-action",
+        players: room.players,
+        filterPlayer: (player) => player.alive,
+        extraText: "Choose one living player to protect tonight. You may protect yourself.",
+      });
+      return;
+    }
+
+    addActionText("You are sleeping this night. Watch for the host to resolve night actions.");
+    return;
+  }
+
+  if (phase === "day") {
+    addActionText("Discuss in chat. Share suspicions, defend yourself, and ask the host to start voting when ready.");
+    return;
+  }
+
+  if (phase === "vote") {
+    renderActionForm({
+      buttonText: room.myVoteTargetId ? "Change Vote" : "Vote",
+      endpoint: "vote",
+      players: room.players,
+      filterPlayer: (player) => player.alive && !player.isMe,
+      selectedId: room.myVoteTargetId,
+      extraText: "Vote for one living player to eliminate.",
+    });
+  }
+}
+
 function renderRoom(room) {
   const me = room.players.find((player) => player.isMe);
   const isHost = me?.isHost;
 
-  roomKicker.textContent = room.started ? "Game started" : "Lobby";
-  roomTitle.textContent = room.started ? "Private Chits" : "Waiting Room";
+  const phase = room.phase || (room.started ? "night" : "lobby");
+  roomKicker.textContent = phaseName(phase);
+  roomTitle.textContent = phase === "lobby" ? "Waiting Room" : `Round ${room.round || 1}`;
   roomCode.textContent = room.code;
   joinedCount.textContent = `${room.players.length}/${room.maxPlayers}`;
   seenCount.textContent = room.players.filter((player) => player.seen).length;
   inviteLink.value = roomUrl(room.code);
   hostActions.classList.toggle("hidden", !isHost);
   myChitPanel.classList.toggle("hidden", !room.started || !me);
+  startGame.classList.toggle("hidden", room.started);
+  resolveNight.classList.toggle("hidden", phase !== "night");
+  startVote.classList.toggle("hidden", phase !== "day");
+  resolveVote.classList.toggle("hidden", phase !== "vote");
   startGame.disabled = room.started;
+  resolveNight.disabled = !room.started || phase !== "night";
+  startVote.disabled = !room.started || phase !== "day";
+  resolveVote.disabled = !room.started || phase !== "vote";
   resetGame.disabled = !room.started;
 
-  instructionBand.textContent = room.started
-    ? "Chits are live. Each player can reveal only their own role on their own device."
-    : isHost
+  if (phase === "ended") {
+    instructionBand.textContent = `${room.winner} win. The host can reset chits to play again.`;
+  } else if (phase === "night") {
+    instructionBand.textContent = "Night phase: role players choose actions privately, then the host resolves night.";
+  } else if (phase === "day") {
+    instructionBand.textContent = "Day phase: discuss in chat, then the host starts voting.";
+  } else if (phase === "vote") {
+    instructionBand.textContent = "Voting phase: alive players vote. The host resolves voting when ready.";
+  } else {
+    instructionBand.textContent = isHost
       ? "Share the invite link, then start when everyone is in."
       : "You are in the room. Wait for the host to start and pass the chits.";
+  }
 
   if (me) {
     myName.textContent = `${me.name}'s chit`;
@@ -220,11 +394,12 @@ function renderRoom(room) {
   }
 
   renderChat(room.messages);
+  renderActionPanel(room, me);
 
   playerCards.innerHTML = "";
   room.players.forEach((player, index) => {
     const card = document.createElement("article");
-    card.className = `player-card${player.seen ? " seen" : ""}`;
+    card.className = `player-card${player.seen ? " seen" : ""}${player.alive ? "" : " dead"}`;
 
     const topLine = document.createElement("div");
     topLine.className = "player-topline";
@@ -235,7 +410,7 @@ function renderRoom(room) {
 
     const badge = document.createElement("span");
     badge.className = "seen-badge";
-    badge.textContent = room.started ? (player.seen ? "Seen" : "Hidden") : "Joined";
+    badge.textContent = player.alive ? (room.started ? (player.seen ? "Seen" : "Hidden") : "Joined") : "Out";
 
     const name = document.createElement("div");
     name.className = "player-name";
@@ -319,6 +494,22 @@ startGame.addEventListener("click", async () => {
     instructionBand.textContent = error.message;
   }
 });
+
+async function runHostCommand(endpoint) {
+  try {
+    await requestJson(`/api/rooms/${session.code}/${endpoint}`, {
+      method: "POST",
+      body: JSON.stringify({ token: session.token }),
+    });
+    await refreshRoom();
+  } catch (error) {
+    instructionBand.textContent = error.message;
+  }
+}
+
+resolveNight.addEventListener("click", () => runHostCommand("resolve-night"));
+startVote.addEventListener("click", () => runHostCommand("start-vote"));
+resolveVote.addEventListener("click", () => runHostCommand("resolve-vote"));
 
 resetGame.addEventListener("click", async () => {
   try {
