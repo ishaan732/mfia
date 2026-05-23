@@ -130,55 +130,77 @@
           <button type="button" class="ghost-button" id="resetGame">Reset Chits</button>
         </div>
 
-        <div id="playerCards" class="player-cards"></div>
+        <div class="game-layout">
+          <div class="game-main">
+            <div id="playerCards" class="player-cards"></div>
 
-        <div class="room-tools">
-          <section class="my-chit-panel hidden" id="myChitPanel">
-            <p class="eyebrow" id="myName">Your chit</p>
-            <div class="chit-card" id="chitCard">
-              <span class="role-icon" id="roleIcon">?</span>
-              <h2 id="roleName">Hidden</h2>
-              <p id="roleHint">Reveal only when nobody else can see your screen.</p>
-            </div>
-            <button type="button" class="primary-button" id="revealChit">Reveal My Chit</button>
-          </section>
+            <div class="room-tools">
+              <section class="my-chit-panel hidden" id="myChitPanel">
+                <p class="eyebrow" id="myName">Your chit</p>
+                <div class="chit-card" id="chitCard">
+                  <span class="role-icon" id="roleIcon">?</span>
+                  <h2 id="roleName">Hidden</h2>
+                  <p id="roleHint">Reveal only when nobody else can see your screen.</p>
+                </div>
+                <button type="button" class="primary-button" id="revealChit">Reveal My Chit</button>
+              </section>
 
-          <section class="info-panel">
-            <div class="section-title">
-              <h2>How To Play</h2>
+              <section class="action-panel hidden" id="actionPanel">
+                <div class="section-title">
+                  <h2 id="actionTitle">Game Action</h2>
+                  <span class="chat-count" id="phaseLabel">Round 1</span>
+                </div>
+                <div id="actionBody" class="action-body"></div>
+              </section>
             </div>
-            <ol class="how-list">
-              <li>Mafia wins by staying hidden until they control the vote.</li>
-              <li>Civilians win by finding and voting out all Mafia.</li>
-              <li>At night, Mafia attacks, Detective checks, and Doctor protects.</li>
-              <li>During the day, everyone discusses what happened.</li>
-              <li>During voting, alive players vote one player out.</li>
-            </ol>
-          </section>
+
+            <section class="chat-panel">
+              <div class="section-title">
+                <h2>Chat Mode</h2>
+                <span class="chat-count" id="chatCount">0 messages</span>
+              </div>
+              <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+              <form id="chatForm" class="chat-form">
+                <label class="field">
+                  <span>Message</span>
+                  <input id="chatInput" type="text" maxlength="160" placeholder="Type to the room" autocomplete="off" />
+                </label>
+                <button type="submit" class="primary-button">Send</button>
+              </form>
+            </section>
+          </div>
+
+          <aside class="side-guide">
+            <section class="info-panel">
+              <div class="section-title">
+                <h2>How To Play</h2>
+              </div>
+              <ol class="how-list">
+                <li>Reveal your chit privately.</li>
+                <li>Mafia secretly attacks at night.</li>
+                <li>Detective checks one player at night.</li>
+                <li>Doctor protects one player at night.</li>
+                <li>Everyone discusses during the day.</li>
+                <li>Alive players vote someone out.</li>
+              </ol>
+            </section>
+
+            <section class="info-panel">
+              <div class="section-title">
+                <h2>Round Flow</h2>
+              </div>
+              <ol class="how-list compact-list">
+                <li>Night actions</li>
+                <li>Host resolves night</li>
+                <li>Day chat</li>
+                <li>Host starts vote</li>
+                <li>Players vote</li>
+                <li>Host resolves vote</li>
+                <li>Repeat until Mafia or Civilians win</li>
+              </ol>
+            </section>
+          </aside>
         </div>
-
-        <section class="action-panel hidden" id="actionPanel">
-          <div class="section-title">
-            <h2 id="actionTitle">Game Action</h2>
-            <span class="chat-count" id="phaseLabel">Round 1</span>
-          </div>
-          <div id="actionBody" class="action-body"></div>
-        </section>
-
-        <section class="chat-panel">
-          <div class="section-title">
-            <h2>Chat Mode</h2>
-            <span class="chat-count" id="chatCount">0 messages</span>
-          </div>
-          <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
-          <form id="chatForm" class="chat-form">
-            <label class="field">
-              <span>Message</span>
-              <input id="chatInput" type="text" maxlength="160" placeholder="Type to the room" autocomplete="off" />
-            </label>
-            <button type="submit" class="primary-button">Send</button>
-          </form>
-        </section>
       </section>
     </main>
 

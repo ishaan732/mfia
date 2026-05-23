@@ -266,9 +266,27 @@ select:focus {
   gap: 14px;
 }
 
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 16px;
+  align-items: start;
+}
+
+.game-main,
+.side-guide {
+  display: grid;
+  gap: 14px;
+}
+
+.side-guide {
+  position: sticky;
+  top: 14px;
+}
+
 .room-tools {
   display: grid;
-  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
   gap: 14px;
   align-items: stretch;
 }
@@ -315,6 +333,10 @@ select:focus {
 .how-list li::marker {
   color: var(--accent);
   font-weight: 900;
+}
+
+.compact-list {
+  gap: 8px;
 }
 
 .player-card {
@@ -528,6 +550,7 @@ select:focus {
   .role-grid,
   .name-fields,
   .online-grid,
+  .game-layout,
   .room-tools,
   .share-band,
   .host-actions,
