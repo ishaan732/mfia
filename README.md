@@ -47,6 +47,6 @@ Roles are assigned and stored on the server. The room list shows only player nam
 After the host starts, the app runs the Mafia flow:
 
 - Night: Mafia attacks, Detective checks, Doctor protects.
-- Day: everyone discusses in chat.
+- Voting starts right after night is resolved, so players discuss quickly while voting.
 - Vote: alive players vote one player out.
 - The app marks eliminated players and announces when Mafia or Civilians win.

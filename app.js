@@ -372,11 +372,11 @@ function renderRoom(room) {
   if (phase === "ended") {
     instructionBand.textContent = `${room.winner} win. The host can reset chits to play again.`;
   } else if (phase === "night") {
-    instructionBand.textContent = "Night phase: role players choose actions privately, then the host resolves night.";
+    instructionBand.textContent = "Night phase: role players choose actions privately, then the host resolves night and starts voting.";
   } else if (phase === "day") {
     instructionBand.textContent = "Day phase: discuss in chat, then the host starts voting.";
   } else if (phase === "vote") {
-    instructionBand.textContent = "Voting phase: alive players vote. The host resolves voting when ready.";
+    instructionBand.textContent = "Voting phase: discuss quickly, vote, then the host resolves voting.";
   } else {
     instructionBand.textContent = isHost
       ? "Share the invite link, then start when everyone is in."

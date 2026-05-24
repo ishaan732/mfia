@@ -466,8 +466,9 @@ async function handleApi(request, response) {
         }
 
         if (!endIfWon(room)) {
-          room.phase = "day";
-          addSystemMessage(room, "Day discussion has begun. Talk it out, then the host can start voting.");
+          room.phase = "vote";
+          room.votes = {};
+          addSystemMessage(room, "Voting has started. Discuss quickly, then alive players should vote.");
         }
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
