@@ -6,11 +6,13 @@ const path = require("path");
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = __dirname;
 const rooms = new Map();
-const TIMER_SECONDS = {
-  night: 45,
-  vote: 60,
-};
 const TIMER_EXTENSION_SECONDS = 30;
+const DEFAULT_SETTINGS = {
+  nightSeconds: 45,
+  voteSeconds: 60,
+  maxRounds: 0,
+  autoResolve: true,
+};
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -77,6 +79,10 @@ function cleanReconnectCode(code) {
   return String(code || "").replace(/\D/g, "").slice(0, 8);
 }
 
+function cleanPassword(password) {
+  return String(password || "").trim().slice(0, 32);
+}
+
 function cleanMessage(message) {
   return String(message || "").trim().replace(/\s+/g, " ").slice(0, 160);
 }
@@ -99,6 +105,14 @@ function findPlayer(room, token) {
   return room.players.find((player) => player.token === token);
 }
 
+function findSpectator(room, token) {
+  return (room.spectators || []).find((spectator) => spectator.token === token);
+}
+
+function findViewer(room, token) {
+  return findPlayer(room, token) || findSpectator(room, token);
+}
+
 function alivePlayers(room) {
   return room.players.filter((player) => player.alive);
 }
@@ -115,8 +129,23 @@ function phaseNameForLog(phase) {
   }[phase] || "round";
 }
 
+function hashPassword(password) {
+  const clean = cleanPassword(password);
+  return clean ? crypto.createHash("sha256").update(clean).digest("hex") : "";
+}
+
+function passwordMatches(room, password) {
+  return !room.passwordHash || room.passwordHash === hashPassword(password);
+}
+
+function timerSecondsFor(room, phase) {
+  if (phase === "night") return clamp(room.settings?.nightSeconds, 10, 300);
+  if (phase === "vote") return clamp(room.settings?.voteSeconds, 10, 300);
+  return 0;
+}
+
 function setPhaseTimer(room, phase) {
-  const seconds = TIMER_SECONDS[phase] || 0;
+  const seconds = timerSecondsFor(room, phase);
   room.phaseDurationSeconds = seconds;
   room.phaseEndsAt = seconds ? Date.now() + seconds * 1000 : null;
 }
@@ -163,6 +192,10 @@ function clearRoundActions(room) {
   room.votes = {};
 }
 
+function clearRoundScreens(room) {
+  room.lastVoteResults = null;
+}
+
 function checkWinner(room) {
   const alive = alivePlayers(room);
   const mafiaCount = alive.filter((player) => player.role === "Mafia").length;
@@ -173,14 +206,36 @@ function checkWinner(room) {
   return null;
 }
 
+function saveGameHistory(room) {
+  if (!room.history) room.history = [];
+  if (room.history[0]?.endedAt === room.endedAt) return;
+  room.history.unshift({
+    endedAt: room.endedAt || Date.now(),
+    winner: room.winner,
+    round: room.round || 0,
+    players: room.players.map((player) => ({
+      name: player.name,
+      role: player.role,
+      alive: player.alive,
+    })),
+  });
+  room.history = room.history.slice(0, 5);
+}
+
+function endGame(room, winner, message) {
+  room.phase = "ended";
+  room.winner = winner;
+  room.endedAt = Date.now();
+  setPhaseTimer(room, "ended");
+  addSystemMessage(room, message || `${winner} win the game.`);
+  saveGameHistory(room);
+}
+
 function endIfWon(room) {
   const winner = checkWinner(room);
   if (!winner) return false;
 
-  room.phase = "ended";
-  room.winner = winner;
-  setPhaseTimer(room, "ended");
-  addSystemMessage(room, `${winner} win the game.`);
+  endGame(room, winner, `${winner} win the game.`);
   return true;
 }
 
@@ -200,8 +255,149 @@ function livingTarget(room, targetId) {
   return room.players.find((player) => player.id === targetId && player.alive);
 }
 
+function publicSettings(room) {
+  return {
+    nightSeconds: clamp(room.settings?.nightSeconds, 10, 300),
+    voteSeconds: clamp(room.settings?.voteSeconds, 10, 300),
+    maxRounds: clamp(room.settings?.maxRounds, 0, 20),
+    autoResolve: room.settings?.autoResolve !== false,
+    hasPassword: Boolean(room.passwordHash),
+  };
+}
+
+function sanitizeSettings(room, body) {
+  const maxPlayers = clamp(body.maxPlayers ?? room.maxPlayers, Math.max(1, room.players.length), 10);
+  const mafia = clamp(body.roles?.mafia ?? room.roles.mafia, maxPlayers > 1 ? 1 : 0, maxPlayers);
+  const detective = clamp(body.roles?.detective ?? room.roles.detective, 0, Math.min(1, maxPlayers - mafia));
+  const doctor = clamp(body.roles?.doctor ?? room.roles.doctor, 0, Math.min(1, maxPlayers - mafia - detective));
+  return {
+    maxPlayers,
+    roles: { mafia, detective, doctor },
+    settings: {
+      nightSeconds: clamp(body.settings?.nightSeconds ?? room.settings?.nightSeconds, 10, 300),
+      voteSeconds: clamp(body.settings?.voteSeconds ?? room.settings?.voteSeconds, 10, 300),
+      maxRounds: clamp(body.settings?.maxRounds ?? room.settings?.maxRounds, 0, 20),
+      autoResolve: body.settings?.autoResolve !== false,
+    },
+    passwordHash: body.password === undefined ? room.passwordHash : hashPassword(body.password),
+  };
+}
+
+function nightActionStatus(room) {
+  if (!room.started || room.phase !== "night") return [];
+  const statuses = [];
+  const aliveMafia = alivePlayers(room).filter((player) => player.role === "Mafia");
+  if (aliveMafia.length) {
+    statuses.push({ label: "Mafia", done: Boolean(room.night?.mafiaTargetId) });
+  }
+  const detective = alivePlayers(room).find((player) => player.role === "Detective");
+  if (detective) {
+    statuses.push({ label: "Detective", done: Boolean(room.night?.detectiveChecks?.[detective.id]) });
+  }
+  const doctor = alivePlayers(room).find((player) => player.role === "Doctor");
+  if (doctor) {
+    statuses.push({ label: "Doctor", done: Boolean(room.night?.doctorTargetId) });
+  }
+  return statuses;
+}
+
+function voteResultsFor(room) {
+  if (!room.lastVoteResults) return null;
+  return {
+    round: room.lastVoteResults.round,
+    eliminatedName: room.lastVoteResults.eliminatedName,
+    tied: room.lastVoteResults.tied,
+    rows: room.lastVoteResults.rows,
+    tallies: room.lastVoteResults.tallies,
+  };
+}
+
+function resolveNight(room, reason = "Host") {
+  const target = livingTarget(room, room.night?.mafiaTargetId);
+  const protectedId = room.night?.doctorTargetId;
+  if (target && target.id !== protectedId) {
+    target.alive = false;
+    addSystemMessage(room, `${target.name} was eliminated during the night.`);
+  } else if (target && target.id === protectedId) {
+    addSystemMessage(room, "Nobody was eliminated. The Doctor protected the target.");
+  } else {
+    addSystemMessage(room, "Nobody was eliminated during the night.");
+  }
+
+  if (!endIfWon(room)) {
+    room.phase = "vote";
+    room.votes = {};
+    setPhaseTimer(room, "vote");
+    addSystemMessage(room, `${reason === "Timer" ? "Timer ended." : "Voting has started."} Discuss quickly, then alive players should vote.`);
+  }
+}
+
+function resolveVote(room) {
+  const tallies = new Map();
+  const rows = [];
+  for (const voter of alivePlayers(room)) {
+    const targetId = room.votes?.[voter.id];
+    const target = livingTarget(room, targetId);
+    if (target) {
+      rows.push({ voterName: voter.name, targetName: target.name });
+      tallies.set(targetId, (tallies.get(targetId) || 0) + 1);
+    } else {
+      rows.push({ voterName: voter.name, targetName: "No vote" });
+    }
+  }
+
+  const ranked = [...tallies.entries()].sort((left, right) => right[1] - left[1]);
+  let eliminatedName = null;
+  let tied = false;
+  if (ranked.length === 0) {
+    addSystemMessage(room, "No valid votes were cast. Nobody was eliminated.");
+  } else if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) {
+    tied = true;
+    addSystemMessage(room, "The vote was tied. Nobody was eliminated.");
+  } else {
+    const eliminated = livingTarget(room, ranked[0][0]);
+    eliminated.alive = false;
+    eliminatedName = eliminated.name;
+    addSystemMessage(room, `${eliminated.name} was voted out with ${ranked[0][1]} vote(s).`);
+  }
+
+  room.lastVoteResults = {
+    round: room.round || 1,
+    eliminatedName,
+    tied,
+    rows,
+    tallies: ranked.map(([targetId, count]) => ({ name: playerName(room, targetId), count })),
+  };
+
+  if (endIfWon(room)) return;
+  if (room.settings?.maxRounds > 0 && (room.round || 1) >= room.settings.maxRounds) {
+    endGame(room, "Civilians", `Civilians survive after ${room.settings.maxRounds} round(s).`);
+    return;
+  }
+
+  room.round = (room.round || 1) + 1;
+  room.phase = "night";
+  clearRoundActions(room);
+  setPhaseTimer(room, "night");
+  addSystemMessage(room, `Round ${room.round} night has begun.`);
+}
+
+function advanceExpiredTimer(room) {
+  if (!room.started || room.phase === "lobby" || room.phase === "ended") return;
+  if (room.settings?.autoResolve === false || !room.phaseEndsAt || room.phaseEndsAt > Date.now()) return;
+  if (room.phase === "night") {
+    addSystemMessage(room, "Night timer ended.");
+    resolveNight(room, "Timer");
+  } else if (room.phase === "vote") {
+    addSystemMessage(room, "Voting timer ended.");
+    resolveVote(room);
+  }
+}
+
 function serializeRoom(room, token) {
+  advanceExpiredTimer(room);
   const player = findPlayer(room, token);
+  const spectator = findSpectator(room, token);
   const myDetectiveCheck = player ? room.night?.detectiveChecks?.[player.id] : null;
   const mafiaTarget = room.night?.mafiaTargetId;
   const doctorTarget = room.night?.doctorTargetId;
@@ -212,6 +408,8 @@ function serializeRoom(room, token) {
   return {
     code: room.code,
     maxPlayers: room.maxPlayers,
+    roles: room.roles,
+    settings: publicSettings(room),
     started: room.started,
     phase: room.phase || (room.started ? "night" : "lobby"),
     round: room.round || 0,
@@ -222,6 +420,8 @@ function serializeRoom(room, token) {
     myRole: player?.seen ? player.role : null,
     myAlive: player?.alive ?? true,
     myReconnectCode: player?.reconnectCode || null,
+    isSpectator: Boolean(spectator),
+    myMuted: player?.muted || false,
     canUseMafiaChat,
     canUseDeadChat,
     myVoteTargetId: player ? room.votes?.[player.id] || null : null,
@@ -247,9 +447,15 @@ function serializeRoom(room, token) {
       name: roomPlayer.name,
       seen: roomPlayer.seen,
       alive: roomPlayer.alive ?? true,
+      ready: roomPlayer.ready || false,
+      muted: roomPlayer.muted || false,
       role: room.phase === "ended" ? roomPlayer.role : null,
       isHost: roomPlayer.id === room.hostId,
       isMe: roomPlayer.token === token,
+    })),
+    spectators: (room.spectators || []).map((roomSpectator) => ({
+      name: roomSpectator.name,
+      isMe: roomSpectator.token === token,
     })),
     messages: (room.messages || []).map((message) => ({
       id: message.id,
@@ -282,6 +488,9 @@ function serializeRoom(room, token) {
       text: entry.text,
       createdAt: entry.createdAt,
     })),
+    actionStatus: player?.id === room.hostId ? nightActionStatus(room) : [],
+    voteResults: voteResultsFor(room),
+    history: (room.history || []).slice(0, 5),
   };
 }
 
@@ -340,16 +549,21 @@ async function handleApi(request, response) {
       const room = {
         code: makeCode(),
         maxPlayers,
+        settings: { ...DEFAULT_SETTINGS },
+        passwordHash: hashPassword(body.password),
         roles: {
           mafia: clamp(body.roles?.mafia, maxPlayers > 1 ? 1 : 0, maxPlayers),
           detective: clamp(body.roles?.detective, 0, 1),
           doctor: clamp(body.roles?.doctor, 0, 1),
         },
         players: [],
+        spectators: [],
         messages: [],
         mafiaMessages: [],
         deadMessages: [],
         log: [],
+        history: [],
+        lastVoteResults: null,
         hostId: "",
         started: false,
         phase: "lobby",
@@ -361,6 +575,12 @@ async function handleApi(request, response) {
         phaseDurationSeconds: 0,
         createdAt: Date.now(),
       };
+      room.settings = {
+        nightSeconds: body.settings?.nightSeconds === undefined ? DEFAULT_SETTINGS.nightSeconds : clamp(body.settings.nightSeconds, 10, 300),
+        voteSeconds: body.settings?.voteSeconds === undefined ? DEFAULT_SETTINGS.voteSeconds : clamp(body.settings.voteSeconds, 10, 300),
+        maxRounds: body.settings?.maxRounds === undefined ? DEFAULT_SETTINGS.maxRounds : clamp(body.settings.maxRounds, 0, 20),
+        autoResolve: body.settings?.autoResolve !== false,
+      };
       const player = {
         id: crypto.randomUUID(),
         name: cleanName(body.hostName, "Host"),
@@ -369,6 +589,8 @@ async function handleApi(request, response) {
         role: null,
         seen: false,
         alive: true,
+        ready: false,
+        muted: false,
       };
       room.hostId = player.id;
       room.players.push(player);
@@ -388,8 +610,8 @@ async function handleApi(request, response) {
 
       if (request.method === "GET" && parts.length === 3) {
         const token = url.searchParams.get("token");
-        if (!findPlayer(room, token)) {
-          sendJson(response, 403, { error: "Join the room again to continue." });
+        if (!findViewer(room, token)) {
+          sendJson(response, 403, { error: "Join or spectate the room again to continue." });
           return;
         }
         sendJson(response, 200, serializeRoom(room, token));
@@ -414,6 +636,10 @@ async function handleApi(request, response) {
           sendJson(response, 200, { code: room.code, token: reconnectingPlayer.token });
           return;
         }
+        if (!passwordMatches(room, body.password)) {
+          sendJson(response, 403, { error: "Wrong room password." });
+          return;
+        }
         if (room.started) {
           sendJson(response, 409, { error: "This game has already started. Enter your reconnect code to get back in." });
           return;
@@ -434,10 +660,32 @@ async function handleApi(request, response) {
           role: null,
           seen: false,
           alive: true,
+          ready: false,
+          muted: false,
         };
         room.players.push(player);
         addSystemMessage(room, `${player.name} joined the room.`);
         sendJson(response, 201, { code: room.code, token: player.token });
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "spectate") {
+        const body = await readBody(request);
+        if (!passwordMatches(room, body.password)) {
+          sendJson(response, 403, { error: "Wrong room password." });
+          return;
+        }
+        const name = cleanName(body.name, "Spectator");
+        const spectator = {
+          id: crypto.randomUUID(),
+          name,
+          token: makeToken(),
+        };
+        if (!room.spectators) room.spectators = [];
+        room.spectators.push(spectator);
+        room.spectators = room.spectators.slice(-20);
+        addSystemMessage(room, `${spectator.name} is watching as a spectator.`);
+        sendJson(response, 201, { code: room.code, token: spectator.token, spectator: true });
         return;
       }
 
@@ -453,6 +701,11 @@ async function handleApi(request, response) {
           sendJson(response, 403, { error: "Only the host can start the game." });
           return;
         }
+        const notReady = room.players.filter((roomPlayer) => !roomPlayer.ready);
+        if (notReady.length) {
+          sendJson(response, 409, { error: `Waiting for ready: ${notReady.map((roomPlayer) => roomPlayer.name).join(", ")}` });
+          return;
+        }
         const roles = shuffle(roleListFor(room));
         room.players.forEach((roomPlayer, index) => {
           roomPlayer.role = roles[index];
@@ -466,6 +719,7 @@ async function handleApi(request, response) {
         room.mafiaMessages = [];
         room.deadMessages = [];
         room.log = [];
+        clearRoundScreens(room);
         clearRoundActions(room);
         setPhaseTimer(room, "night");
         addSystemMessage(room, "Round 1 night has begun. Mafia, Detective, and Doctor can act.");
@@ -488,12 +742,80 @@ async function handleApi(request, response) {
           roomPlayer.role = null;
           roomPlayer.seen = false;
           roomPlayer.alive = true;
+          roomPlayer.ready = false;
         });
         room.messages = [];
         room.mafiaMessages = [];
         room.deadMessages = [];
         room.log = [];
+        clearRoundScreens(room);
         addSystemMessage(room, "The game was reset. Waiting for a new start.");
+        sendJson(response, 200, serializeRoom(room, player.token));
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "ready") {
+        if (room.started) {
+          sendJson(response, 409, { error: "Ready is only for the lobby." });
+          return;
+        }
+        player.ready = body.ready !== false;
+        addSystemMessage(room, `${player.name} is ${player.ready ? "ready" : "not ready"}.`);
+        sendJson(response, 200, serializeRoom(room, player.token));
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "settings") {
+        if (player.id !== room.hostId) {
+          sendJson(response, 403, { error: "Only the host can change settings." });
+          return;
+        }
+        if (room.started) {
+          sendJson(response, 409, { error: "Settings can only change before the game starts." });
+          return;
+        }
+        const nextSettings = sanitizeSettings(room, body);
+        room.maxPlayers = nextSettings.maxPlayers;
+        room.roles = nextSettings.roles;
+        room.settings = nextSettings.settings;
+        room.passwordHash = nextSettings.passwordHash;
+        addSystemMessage(room, "Host updated the room settings.");
+        sendJson(response, 200, serializeRoom(room, player.token));
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "kick") {
+        if (player.id !== room.hostId) {
+          sendJson(response, 403, { error: "Only the host can kick players." });
+          return;
+        }
+        if (room.started) {
+          sendJson(response, 409, { error: "Players can only be kicked before the game starts." });
+          return;
+        }
+        const target = room.players.find((roomPlayer) => roomPlayer.id === body.targetId);
+        if (!target || target.id === room.hostId) {
+          sendJson(response, 400, { error: "Choose a non-host player to kick." });
+          return;
+        }
+        room.players = room.players.filter((roomPlayer) => roomPlayer.id !== target.id);
+        addSystemMessage(room, `${target.name} was removed from the lobby.`);
+        sendJson(response, 200, serializeRoom(room, player.token));
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "mute") {
+        if (player.id !== room.hostId) {
+          sendJson(response, 403, { error: "Only the host can mute players." });
+          return;
+        }
+        const target = room.players.find((roomPlayer) => roomPlayer.id === body.targetId);
+        if (!target || target.id === room.hostId) {
+          sendJson(response, 400, { error: "Choose a non-host player to mute." });
+          return;
+        }
+        target.muted = body.muted !== false;
+        addSystemMessage(room, `${target.name} was ${target.muted ? "muted" : "unmuted"}.`);
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
       }
@@ -570,23 +892,7 @@ async function handleApi(request, response) {
           return;
         }
 
-        const target = livingTarget(room, room.night?.mafiaTargetId);
-        const protectedId = room.night?.doctorTargetId;
-        if (target && target.id !== protectedId) {
-          target.alive = false;
-          addSystemMessage(room, `${target.name} was eliminated during the night.`);
-        } else if (target && target.id === protectedId) {
-          addSystemMessage(room, "Nobody was eliminated. The Doctor protected the target.");
-        } else {
-          addSystemMessage(room, "Nobody was eliminated during the night.");
-        }
-
-        if (!endIfWon(room)) {
-          room.phase = "vote";
-          room.votes = {};
-          setPhaseTimer(room, "vote");
-          addSystemMessage(room, "Voting has started. Discuss quickly, then alive players should vote.");
-        }
+        resolveNight(room, "Host");
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
       }
@@ -659,37 +965,16 @@ async function handleApi(request, response) {
           return;
         }
 
-        const tallies = new Map();
-        for (const voter of alivePlayers(room)) {
-          const targetId = room.votes?.[voter.id];
-          if (livingTarget(room, targetId)) {
-            tallies.set(targetId, (tallies.get(targetId) || 0) + 1);
-          }
-        }
-
-        const ranked = [...tallies.entries()].sort((left, right) => right[1] - left[1]);
-        if (ranked.length === 0) {
-          addSystemMessage(room, "No valid votes were cast. Nobody was eliminated.");
-        } else if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) {
-          addSystemMessage(room, "The vote was tied. Nobody was eliminated.");
-        } else {
-          const eliminated = livingTarget(room, ranked[0][0]);
-          eliminated.alive = false;
-          addSystemMessage(room, `${eliminated.name} was voted out with ${ranked[0][1]} vote(s).`);
-        }
-
-        if (!endIfWon(room)) {
-          room.round = (room.round || 1) + 1;
-          room.phase = "night";
-          clearRoundActions(room);
-          setPhaseTimer(room, "night");
-          addSystemMessage(room, `Round ${room.round} night has begun.`);
-        }
+        resolveVote(room);
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
       }
 
       if (request.method === "POST" && parts[3] === "messages") {
+        if (player.muted) {
+          sendJson(response, 403, { error: "You are muted by the host." });
+          return;
+        }
         const text = cleanMessage(body.message);
         if (!text) {
           sendJson(response, 400, { error: "Message cannot be empty." });
@@ -729,11 +1014,12 @@ async function handleApi(request, response) {
 setInterval(() => {
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
   for (const [code, room] of rooms.entries()) {
+    advanceExpiredTimer(room);
     if (room.createdAt < oneDayAgo) {
       rooms.delete(code);
     }
   }
-}, 60 * 60 * 1000);
+}, 1000);
 
 const server = http.createServer((request, response) => {
   if (request.url.startsWith("/api/")) {

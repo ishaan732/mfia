@@ -55,3 +55,7 @@ After the host starts, the app runs the Mafia flow:
 - Night and voting phases have countdown timers. The host can resolve early or add 30 seconds.
 - Mafia get a private night chat. Eliminated players get Dead Chat, which alive players cannot see.
 - The side Game Log records public events, and the end screen reveals every player's role.
+- Hosts can set timers, max rounds, role counts, auto-resolve, and an optional room password before starting.
+- Players mark themselves ready before the host starts. Hosts can kick lobby players and mute chat.
+- Spectators can watch read-only with the room password, without taking a player slot.
+- Vote results, private notes, themes, sound effects, QR sharing, role guide, and last 5 game history are built in.

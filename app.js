@@ -6,10 +6,16 @@ const hostNameInput = document.querySelector("#hostName");
 const joinNameInput = document.querySelector("#joinName");
 const joinCodeInput = document.querySelector("#joinCode");
 const reconnectCodeInput = document.querySelector("#reconnectCode");
+const createPasswordInput = document.querySelector("#createPassword");
+const joinPasswordInput = document.querySelector("#joinPassword");
 const playerCountInput = document.querySelector("#playerCount");
 const mafiaCountInput = document.querySelector("#mafiaCount");
 const detectiveCountInput = document.querySelector("#detectiveCount");
 const doctorCountInput = document.querySelector("#doctorCount");
+const nightSecondsInput = document.querySelector("#nightSeconds");
+const voteSecondsInput = document.querySelector("#voteSeconds");
+const maxRoundsInput = document.querySelector("#maxRounds");
+const autoResolveInput = document.querySelector("#autoResolve");
 const errorMessage = document.querySelector("#errorMessage");
 const roomKicker = document.querySelector("#roomKicker");
 const roomTitle = document.querySelector("#roomTitle");
@@ -19,6 +25,7 @@ const joinedCount = document.querySelector("#joinedCount");
 const seenCount = document.querySelector("#seenCount");
 const roomCode = document.querySelector("#roomCode");
 const timerCountdown = document.querySelector("#timerCountdown");
+const spectatorCount = document.querySelector("#spectatorCount");
 const reconnectCodeDisplay = document.querySelector("#reconnectCodeDisplay");
 const instructionBand = document.querySelector("#instructionBand");
 const hostActions = document.querySelector("#hostActions");
@@ -28,11 +35,27 @@ const startVote = document.querySelector("#startVote");
 const resolveVote = document.querySelector("#resolveVote");
 const extendTimer = document.querySelector("#extendTimer");
 const resetGame = document.querySelector("#resetGame");
+const readyButton = document.querySelector("#readyButton");
 const leaveRoom = document.querySelector("#leaveRoom");
 const playerCards = document.querySelector("#playerCards");
+const hostSettings = document.querySelector("#hostSettings");
+const passwordState = document.querySelector("#passwordState");
+const settingsMaxPlayers = document.querySelector("#settingsMaxPlayers");
+const settingsMafia = document.querySelector("#settingsMafia");
+const settingsDetective = document.querySelector("#settingsDetective");
+const settingsDoctor = document.querySelector("#settingsDoctor");
+const settingsNightSeconds = document.querySelector("#settingsNightSeconds");
+const settingsVoteSeconds = document.querySelector("#settingsVoteSeconds");
+const settingsMaxRounds = document.querySelector("#settingsMaxRounds");
+const settingsPassword = document.querySelector("#settingsPassword");
+const settingsAutoResolve = document.querySelector("#settingsAutoResolve");
+const saveSettings = document.querySelector("#saveSettings");
 const endScreen = document.querySelector("#endScreen");
 const winnerTitle = document.querySelector("#winnerTitle");
 const endRoles = document.querySelector("#endRoles");
+const voteResultsPanel = document.querySelector("#voteResultsPanel");
+const voteResultsRound = document.querySelector("#voteResultsRound");
+const voteResultsList = document.querySelector("#voteResultsList");
 const myChitPanel = document.querySelector("#myChitPanel");
 const myName = document.querySelector("#myName");
 const chitCard = document.querySelector("#chitCard");
@@ -52,6 +75,15 @@ const actionTitle = document.querySelector("#actionTitle");
 const actionBody = document.querySelector("#actionBody");
 const phaseLabel = document.querySelector("#phaseLabel");
 const gameLog = document.querySelector("#gameLog");
+const spectateRoom = document.querySelector("#spectateRoom");
+const openRoleGuide = document.querySelector("#openRoleGuide");
+const closeRoleGuide = document.querySelector("#closeRoleGuide");
+const roleGuideDialog = document.querySelector("#roleGuideDialog");
+const themeSelect = document.querySelector("#themeSelect");
+const soundToggle = document.querySelector("#soundToggle");
+const qrImage = document.querySelector("#qrImage");
+const privateNotes = document.querySelector("#privateNotes");
+const gameHistory = document.querySelector("#gameHistory");
 
 const ROLE_DETAILS = {
   Mafia: {
@@ -82,6 +114,9 @@ let timerId = null;
 let lastRoom = null;
 let activeChatChannel = "room";
 let serverClockOffset = 0;
+let lastPhaseKey = "";
+let lastWarningKey = "";
+let audioContext = null;
 const lastMessageIds = {
   room: "",
   mafia: "",
@@ -102,6 +137,21 @@ function normalizeCreateValues() {
   const detective = clampNumber(detectiveCountInput, 0, detectiveMax);
   const doctorMax = Math.min(1, Math.max(0, maxPlayers - mafia - detective));
   clampNumber(doctorCountInput, 0, doctorMax);
+  clampNumber(nightSecondsInput, 10, 300);
+  clampNumber(voteSecondsInput, 10, 300);
+  clampNumber(maxRoundsInput, 0, 20);
+}
+
+function normalizeSettingsValues() {
+  const maxPlayers = clampNumber(settingsMaxPlayers, Math.max(1, lastRoom?.players?.length || 1), 10);
+  const mafia = clampNumber(settingsMafia, maxPlayers > 1 ? 1 : 0, maxPlayers);
+  const detectiveMax = Math.min(1, Math.max(0, maxPlayers - mafia));
+  const detective = clampNumber(settingsDetective, 0, detectiveMax);
+  const doctorMax = Math.min(1, Math.max(0, maxPlayers - mafia - detective));
+  clampNumber(settingsDoctor, 0, doctorMax);
+  clampNumber(settingsNightSeconds, 10, 300);
+  clampNumber(settingsVoteSeconds, 10, 300);
+  clampNumber(settingsMaxRounds, 0, 20);
 }
 
 function readSessionStore() {
@@ -128,6 +178,7 @@ function saveSession(nextSession) {
   store[session.code] = session;
   writeSessionStore(store);
   localStorage.setItem("chitMafiaSession", JSON.stringify(session));
+  loadPrivateNotes();
 }
 
 function clearSession() {
@@ -144,6 +195,7 @@ function clearSession() {
   pollId = null;
   timerId = null;
   lastRoom = null;
+  privateNotes.value = "";
 }
 
 async function requestJson(path, options = {}) {
@@ -176,6 +228,45 @@ function roomUrl(code) {
   return url.toString();
 }
 
+function notesKey() {
+  return session ? `chitMafiaNotes:${session.code}:${session.token}` : "";
+}
+
+function loadPrivateNotes() {
+  privateNotes.value = notesKey() ? localStorage.getItem(notesKey()) || "" : "";
+}
+
+function playTone(type) {
+  if (!soundToggle.checked) return;
+  audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  const frequency = { phase: 620, message: 420, warning: 880 }[type] || 520;
+  oscillator.frequency.value = frequency;
+  oscillator.type = "sine";
+  gain.gain.setValueAtTime(0.001, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.18);
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + 0.2);
+}
+
+function applyTheme(theme) {
+  document.body.dataset.theme = theme;
+  themeSelect.value = theme;
+  localStorage.setItem("chitMafiaTheme", theme);
+}
+
+function updateQr(code) {
+  if (!code) {
+    qrImage.removeAttribute("src");
+    return;
+  }
+  qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(roomUrl(code))}`;
+}
+
 function renderChit(role) {
   const details = ROLE_DETAILS[role];
   chitCard.classList.add("revealed");
@@ -199,15 +290,20 @@ function renderHiddenChit() {
 
 function chatConfigFor(room, me) {
   const roomLocked = Boolean(room.started && me && !me.alive && room.phase !== "ended");
+  const spectatorLocked = room.isSpectator;
   const channels = [
     {
       id: "room",
       label: "Room",
       inputLabel: "Room message",
-      placeholder: roomLocked ? "Eliminated players use Dead Chat" : "Type to the room",
+      placeholder: spectatorLocked ? "Spectators are read-only" : roomLocked ? "Eliminated players use Dead Chat" : "Type to the room",
       messages: room.messages || [],
-      canSend: !roomLocked,
-      note: roomLocked
+      canSend: !roomLocked && !spectatorLocked && !room.myMuted,
+      note: spectatorLocked
+        ? "Spectators can watch but cannot chat or vote."
+        : room.myMuted
+          ? "The host muted your chat."
+          : roomLocked
         ? "You can read the room chat, but eliminated players only send messages in Dead Chat."
         : "Everyone in the room can see this chat.",
     },
@@ -304,6 +400,9 @@ function renderChatPanel(room, me) {
   if (shouldStickToBottom || newestMessage !== lastMessageIds[activeConfig.id]) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+  if (newestMessage && lastMessageIds[activeConfig.id] && newestMessage !== lastMessageIds[activeConfig.id]) {
+    playTone("message");
+  }
   lastMessageIds[activeConfig.id] = newestMessage;
 }
 
@@ -335,8 +434,14 @@ function updateTimerDisplay() {
     timerCountdown.classList.add("expired");
     return;
   }
-  timerCountdown.textContent = formatSeconds(Math.ceil(remainingMs / 1000));
+  const secondsLeft = Math.ceil(remainingMs / 1000);
+  timerCountdown.textContent = formatSeconds(secondsLeft);
   timerCountdown.classList.remove("expired");
+  const warningKey = `${lastRoom.code}:${lastRoom.phase}:${lastRoom.round}`;
+  if (secondsLeft <= 10 && warningKey !== lastWarningKey) {
+    lastWarningKey = warningKey;
+    playTone("warning");
+  }
 }
 
 function startTimer() {
@@ -371,6 +476,73 @@ function renderGameLog(entries = []) {
     item.append(time, text);
     gameLog.append(item);
   });
+}
+
+function renderGameHistory(history = []) {
+  gameHistory.innerHTML = "";
+  if (history.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-chat";
+    empty.textContent = "No finished games yet.";
+    gameHistory.append(empty);
+    return;
+  }
+  history.forEach((game) => {
+    const item = document.createElement("article");
+    item.className = "log-entry";
+    const title = document.createElement("span");
+    title.textContent = `${game.winner} win - round ${game.round}`;
+    const text = document.createElement("p");
+    text.textContent = game.players.map((player) => `${player.name}: ${player.role}`).join(", ");
+    item.append(title, text);
+    gameHistory.append(item);
+  });
+}
+
+function renderVoteResults(results) {
+  voteResultsPanel.classList.toggle("hidden", !results);
+  if (!results) return;
+
+  voteResultsRound.textContent = `Round ${results.round}`;
+  voteResultsList.innerHTML = "";
+  const summary = document.createElement("p");
+  summary.className = "action-text";
+  summary.textContent = results.eliminatedName
+    ? `${results.eliminatedName} was voted out.`
+    : results.tied
+      ? "The vote tied. Nobody was eliminated."
+      : "Nobody was eliminated.";
+  voteResultsList.append(summary);
+
+  results.rows.forEach((row) => {
+    const item = document.createElement("div");
+    item.className = "result-row";
+    item.textContent = `${row.voterName} voted for ${row.targetName}`;
+    voteResultsList.append(item);
+  });
+}
+
+function renderHostSettings(room, isHost) {
+  hostSettings.classList.toggle("hidden", !isHost || room.started);
+  if (!isHost || room.started) return;
+  passwordState.textContent = room.settings.hasPassword ? "Password on" : "No password";
+  settingsMaxPlayers.value = room.maxPlayers;
+  settingsMafia.value = room.roles.mafia;
+  settingsDetective.value = room.roles.detective;
+  settingsDoctor.value = room.roles.doctor;
+  settingsNightSeconds.value = room.settings.nightSeconds;
+  settingsVoteSeconds.value = room.settings.voteSeconds;
+  settingsMaxRounds.value = room.settings.maxRounds;
+  settingsAutoResolve.checked = room.settings.autoResolve;
+}
+
+function renderActionStatus(room) {
+  if (!room.actionStatus?.length) return;
+  addActionText(
+    room.actionStatus
+      .map((status) => `${status.label}: ${status.done ? "done" : "waiting"}`)
+      .join(" | "),
+  );
 }
 
 function renderEndScreen(room) {
@@ -463,6 +635,7 @@ function renderActionPanel(room, me) {
   const phase = room.phase || "night";
   actionTitle.textContent = phase === "ended" ? "Game Over" : `${phaseName(phase)} Action`;
   phaseLabel.textContent = phase === "ended" ? room.winner || "Finished" : `Round ${room.round || 1}`;
+  renderActionStatus(room);
 
   if (phase === "ended") {
     addActionText(`${room.winner} win. The host can reset chits to play again.`);
@@ -545,8 +718,13 @@ function renderRoom(room) {
 
   const me = room.players.find((player) => player.isMe);
   const isHost = me?.isHost;
-
   const phase = room.phase || (room.started ? "night" : "lobby");
+  const phaseKey = `${room.code}:${phase}:${room.round}:${room.winner || ""}`;
+  if (lastPhaseKey && phaseKey !== lastPhaseKey) {
+    playTone("phase");
+  }
+  lastPhaseKey = phaseKey;
+
   roomKicker.textContent = phaseName(phase);
   roomTitle.textContent = phase === "lobby"
     ? "Waiting Room"
@@ -556,21 +734,28 @@ function renderRoom(room) {
   roomCode.textContent = room.code;
   joinedCount.textContent = `${room.players.length}/${room.maxPlayers}`;
   seenCount.textContent = room.players.filter((player) => player.seen).length;
+  spectatorCount.textContent = room.spectators.length;
   inviteLink.value = roomUrl(room.code);
+  updateQr(room.code);
   reconnectCodeDisplay.textContent = room.myReconnectCode || "--------";
-  hostActions.classList.toggle("hidden", !isHost);
+  hostActions.classList.toggle("hidden", !me || (room.started && !isHost));
+  readyButton.classList.toggle("hidden", room.started || !me);
+  readyButton.textContent = me?.ready ? "Ready ✓" : "Ready";
+  readyButton.disabled = room.started || !me;
   myChitPanel.classList.toggle("hidden", !room.started || !me);
-  startGame.classList.toggle("hidden", room.started);
-  resolveNight.classList.toggle("hidden", phase !== "night");
-  startVote.classList.toggle("hidden", phase !== "day");
-  resolveVote.classList.toggle("hidden", phase !== "vote");
-  extendTimer.classList.toggle("hidden", !room.started || phase === "lobby" || phase === "ended");
-  startGame.disabled = room.started;
+  startGame.classList.toggle("hidden", room.started || !isHost);
+  resolveNight.classList.toggle("hidden", !isHost || phase !== "night");
+  startVote.classList.toggle("hidden", !isHost || phase !== "day");
+  resolveVote.classList.toggle("hidden", !isHost || phase !== "vote");
+  extendTimer.classList.toggle("hidden", !isHost || !room.started || phase === "lobby" || phase === "ended");
+  resetGame.classList.toggle("hidden", !isHost);
+  startGame.disabled = room.started || !room.players.every((player) => player.ready);
   resolveNight.disabled = !room.started || phase !== "night";
   startVote.disabled = !room.started || phase !== "day";
   resolveVote.disabled = !room.started || phase !== "vote";
   extendTimer.disabled = !room.started || phase === "lobby" || phase === "ended";
   resetGame.disabled = !room.started;
+  renderHostSettings(room, isHost);
 
   if (phase === "ended") {
     instructionBand.textContent = `${room.winner} win. The host can reset chits to play again.`;
@@ -598,6 +783,8 @@ function renderRoom(room) {
 
   renderChatPanel(room, me);
   renderGameLog(room.gameLog);
+  renderGameHistory(room.history);
+  renderVoteResults(room.voteResults);
   renderEndScreen(room);
   renderActionPanel(room, me);
 
@@ -615,7 +802,9 @@ function renderRoom(room) {
 
     const badge = document.createElement("span");
     badge.className = "seen-badge";
-    badge.textContent = player.alive ? (room.started ? (player.seen ? "Seen" : "Hidden") : "Joined") : "Out";
+    badge.textContent = room.started
+      ? player.alive ? (player.seen ? "Seen" : "Hidden") : "Out"
+      : player.ready ? "Ready" : "Not ready";
 
     const name = document.createElement("div");
     name.className = "player-name";
@@ -623,11 +812,41 @@ function renderRoom(room) {
 
     topLine.append(number, badge);
     card.append(topLine, name);
+    if (player.muted) {
+      const muted = document.createElement("span");
+      muted.className = "player-role";
+      muted.textContent = "Muted";
+      card.append(muted);
+    }
     if (phase === "ended" && player.role) {
       const role = document.createElement("span");
       role.className = "player-role";
       role.textContent = player.role;
       card.append(role);
+    }
+    if (isHost && !player.isHost) {
+      const controls = document.createElement("div");
+      controls.className = "player-controls";
+
+      const muteButton = document.createElement("button");
+      muteButton.type = "button";
+      muteButton.className = "ghost-button small-button";
+      muteButton.textContent = player.muted ? "Unmute" : "Mute";
+      muteButton.addEventListener("click", () => runHostCommand("mute", {
+        targetId: player.id,
+        muted: !player.muted,
+      }));
+      controls.append(muteButton);
+
+      if (!room.started) {
+        const kickButton = document.createElement("button");
+        kickButton.type = "button";
+        kickButton.className = "ghost-button small-button";
+        kickButton.textContent = "Kick";
+        kickButton.addEventListener("click", () => runHostCommand("kick", { targetId: player.id }));
+        controls.append(kickButton);
+      }
+      card.append(controls);
     }
     playerCards.append(card);
   });
@@ -660,10 +879,17 @@ createForm.addEventListener("submit", async (event) => {
       body: JSON.stringify({
         hostName: hostNameInput.value.trim() || "Host",
         maxPlayers: Number(playerCountInput.value),
+        password: createPasswordInput.value,
         roles: {
           mafia: Number(mafiaCountInput.value),
           detective: Number(detectiveCountInput.value),
           doctor: Number(doctorCountInput.value),
+        },
+        settings: {
+          nightSeconds: Number(nightSecondsInput.value),
+          voteSeconds: Number(voteSecondsInput.value),
+          maxRounds: Number(maxRoundsInput.value),
+          autoResolve: autoResolveInput.checked,
         },
       }),
     });
@@ -686,10 +912,30 @@ joinForm.addEventListener("submit", async (event) => {
       body: JSON.stringify({
         name: joinNameInput.value.trim() || "Player",
         reconnectCode: reconnectCodeInput.value.trim(),
+        password: joinPasswordInput.value,
       }),
     });
     saveSession({ code: room.code, token: room.token });
     reconnectCodeInput.value = "";
+    window.history.replaceState({}, "", roomUrl(room.code));
+    await refreshRoom();
+    startPolling();
+  } catch (error) {
+    errorMessage.textContent = error.message;
+  }
+});
+
+spectateRoom.addEventListener("click", async () => {
+  try {
+    const code = joinCodeInput.value.trim().toUpperCase();
+    const room = await requestJson(`/api/rooms/${code}/spectate`, {
+      method: "POST",
+      body: JSON.stringify({
+        name: joinNameInput.value.trim() || "Spectator",
+        password: joinPasswordInput.value,
+      }),
+    });
+    saveSession({ code: room.code, token: room.token, spectator: true });
     window.history.replaceState({}, "", roomUrl(room.code));
     await refreshRoom();
     startPolling();
@@ -710,11 +956,45 @@ startGame.addEventListener("click", async () => {
   }
 });
 
-async function runHostCommand(endpoint) {
+readyButton.addEventListener("click", () => {
+  const me = lastRoom?.players.find((player) => player.isMe);
+  runHostCommand("ready", { ready: !me?.ready });
+});
+
+saveSettings.addEventListener("click", async () => {
+  normalizeSettingsValues();
+  try {
+    await requestJson(`/api/rooms/${session.code}/settings`, {
+      method: "POST",
+      body: JSON.stringify({
+        token: session.token,
+        maxPlayers: Number(settingsMaxPlayers.value),
+        roles: {
+          mafia: Number(settingsMafia.value),
+          detective: Number(settingsDetective.value),
+          doctor: Number(settingsDoctor.value),
+        },
+        settings: {
+          nightSeconds: Number(settingsNightSeconds.value),
+          voteSeconds: Number(settingsVoteSeconds.value),
+          maxRounds: Number(settingsMaxRounds.value),
+          autoResolve: settingsAutoResolve.checked,
+        },
+        password: settingsPassword.value,
+      }),
+    });
+    settingsPassword.value = "";
+    await refreshRoom();
+  } catch (error) {
+    instructionBand.textContent = error.message;
+  }
+});
+
+async function runHostCommand(endpoint, extraBody = {}) {
   try {
     await requestJson(`/api/rooms/${session.code}/${endpoint}`, {
       method: "POST",
-      body: JSON.stringify({ token: session.token }),
+      body: JSON.stringify({ token: session.token, ...extraBody }),
     });
     await refreshRoom();
   } catch (error) {
@@ -793,6 +1073,29 @@ copyInvite.addEventListener("click", async () => {
   }, 1200);
 });
 
+openRoleGuide.addEventListener("click", () => {
+  roleGuideDialog.showModal();
+});
+
+closeRoleGuide.addEventListener("click", () => {
+  roleGuideDialog.close();
+});
+
+themeSelect.addEventListener("change", () => {
+  applyTheme(themeSelect.value);
+});
+
+soundToggle.addEventListener("change", () => {
+  localStorage.setItem("chitMafiaSound", soundToggle.checked ? "on" : "off");
+  if (soundToggle.checked) playTone("phase");
+});
+
+privateNotes.addEventListener("input", () => {
+  if (notesKey()) {
+    localStorage.setItem(notesKey(), privateNotes.value);
+  }
+});
+
 leaveRoom.addEventListener("click", () => {
   clearSession();
   window.history.replaceState({}, "", window.location.pathname);
@@ -801,6 +1104,22 @@ leaveRoom.addEventListener("click", () => {
 
 [playerCountInput, mafiaCountInput, detectiveCountInput, doctorCountInput].forEach((input) => {
   input.addEventListener("input", normalizeCreateValues);
+});
+
+[nightSecondsInput, voteSecondsInput, maxRoundsInput].forEach((input) => {
+  input.addEventListener("input", normalizeCreateValues);
+});
+
+[
+  settingsMaxPlayers,
+  settingsMafia,
+  settingsDetective,
+  settingsDoctor,
+  settingsNightSeconds,
+  settingsVoteSeconds,
+  settingsMaxRounds,
+].forEach((input) => {
+  input.addEventListener("input", normalizeSettingsValues);
 });
 
 const inviteCode = new URLSearchParams(window.location.search).get("room");
@@ -813,7 +1132,10 @@ if (inviteCode) {
 }
 
 normalizeCreateValues();
+applyTheme(localStorage.getItem("chitMafiaTheme") || "classic");
+soundToggle.checked = localStorage.getItem("chitMafiaSound") === "on";
 if (session) {
+  loadPrivateNotes();
   refreshRoom();
   startPolling();
 }

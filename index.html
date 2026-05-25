@@ -33,6 +33,11 @@
               <input id="playerCount" type="number" min="1" max="10" value="6" />
             </label>
 
+            <label class="field">
+              <span>Room Password</span>
+              <input id="createPassword" type="password" maxlength="32" placeholder="Optional" autocomplete="new-password" />
+            </label>
+
             <div class="role-grid" aria-label="Role counts">
               <label class="field">
                 <span>Mafia</span>
@@ -47,6 +52,26 @@
                 <input id="doctorCount" type="number" min="0" max="1" value="1" />
               </label>
             </div>
+
+            <div class="role-grid" aria-label="Game settings">
+              <label class="field">
+                <span>Night Timer</span>
+                <input id="nightSeconds" type="number" min="10" max="300" value="45" />
+              </label>
+              <label class="field">
+                <span>Vote Timer</span>
+                <input id="voteSeconds" type="number" min="10" max="300" value="60" />
+              </label>
+              <label class="field">
+                <span>Max Rounds</span>
+                <input id="maxRounds" type="number" min="0" max="20" value="0" />
+              </label>
+            </div>
+
+            <label class="check-row">
+              <input id="autoResolve" type="checkbox" checked />
+              <span>Auto resolve when timers end</span>
+            </label>
 
             <button type="submit" class="primary-button">Create Online Room</button>
           </form>
@@ -71,7 +96,15 @@
               <input id="reconnectCode" type="text" inputmode="numeric" maxlength="8" placeholder="Optional" autocomplete="off" />
             </label>
 
-            <button type="submit" class="secondary-button">Join With Code</button>
+            <label class="field">
+              <span>Room Password</span>
+              <input id="joinPassword" type="password" maxlength="32" placeholder="If needed" autocomplete="current-password" />
+            </label>
+
+            <div class="split-actions">
+              <button type="submit" class="secondary-button">Join With Code</button>
+              <button type="button" class="ghost-button" id="spectateRoom">Spectate</button>
+            </div>
           </form>
         </div>
 
@@ -125,6 +158,10 @@
             <span id="timerCountdown">--</span>
             <small>timer</small>
           </div>
+          <div>
+            <span id="spectatorCount">0</span>
+            <small>spectators</small>
+          </div>
         </div>
 
         <div class="private-band">
@@ -138,6 +175,7 @@
         </div>
 
         <div class="host-actions hidden" id="hostActions">
+          <button type="button" class="secondary-button" id="readyButton">Ready</button>
           <button type="button" class="primary-button" id="startGame">Start And Pass Chits</button>
           <button type="button" class="primary-button hidden" id="resolveNight">Resolve Night + Start Vote</button>
           <button type="button" class="primary-button hidden" id="startVote">Start Vote</button>
@@ -146,12 +184,66 @@
           <button type="button" class="ghost-button" id="resetGame">Reset Chits</button>
         </div>
 
+        <section class="settings-panel hidden" id="hostSettings">
+          <div class="section-title">
+            <h2>Host Settings</h2>
+            <span class="chat-count" id="passwordState">No password</span>
+          </div>
+          <div class="settings-grid">
+            <label class="field">
+              <span>Max Players</span>
+              <input id="settingsMaxPlayers" type="number" min="1" max="10" />
+            </label>
+            <label class="field">
+              <span>Mafia</span>
+              <input id="settingsMafia" type="number" min="0" max="10" />
+            </label>
+            <label class="field">
+              <span>Detective</span>
+              <input id="settingsDetective" type="number" min="0" max="1" />
+            </label>
+            <label class="field">
+              <span>Doctor</span>
+              <input id="settingsDoctor" type="number" min="0" max="1" />
+            </label>
+            <label class="field">
+              <span>Night Timer</span>
+              <input id="settingsNightSeconds" type="number" min="10" max="300" />
+            </label>
+            <label class="field">
+              <span>Vote Timer</span>
+              <input id="settingsVoteSeconds" type="number" min="10" max="300" />
+            </label>
+            <label class="field">
+              <span>Max Rounds</span>
+              <input id="settingsMaxRounds" type="number" min="0" max="20" />
+            </label>
+            <label class="field">
+              <span>Room Password</span>
+              <input id="settingsPassword" type="password" maxlength="32" placeholder="Blank clears" autocomplete="new-password" />
+            </label>
+          </div>
+          <label class="check-row">
+            <input id="settingsAutoResolve" type="checkbox" />
+            <span>Auto resolve timers</span>
+          </label>
+          <button type="button" class="primary-button" id="saveSettings">Save Settings</button>
+        </section>
+
         <section class="end-screen hidden" id="endScreen">
           <div>
             <p class="eyebrow">Game Over</p>
             <h2 id="winnerTitle">Winner</h2>
           </div>
           <div id="endRoles" class="role-reveal-grid"></div>
+        </section>
+
+        <section class="results-panel hidden" id="voteResultsPanel">
+          <div class="section-title">
+            <h2>Vote Results</h2>
+            <span class="chat-count" id="voteResultsRound">Round</span>
+          </div>
+          <div id="voteResultsList" class="results-list"></div>
         </section>
 
         <div class="game-layout">
@@ -203,6 +295,41 @@
           <aside class="side-guide">
             <section class="info-panel">
               <div class="section-title">
+                <h2>Tools</h2>
+              </div>
+              <div class="tool-grid">
+                <button type="button" class="ghost-button" id="openRoleGuide">Role Guide</button>
+                <label class="field">
+                  <span>Theme</span>
+                  <select id="themeSelect">
+                    <option value="classic">Classic Paper</option>
+                    <option value="dark">Dark Mode</option>
+                    <option value="red">Red / Black</option>
+                  </select>
+                </label>
+                <label class="check-row">
+                  <input id="soundToggle" type="checkbox" />
+                  <span>Sound effects</span>
+                </label>
+              </div>
+            </section>
+
+            <section class="info-panel">
+              <div class="section-title">
+                <h2>Share QR</h2>
+              </div>
+              <img id="qrImage" class="qr-image" alt="Room invite QR code" />
+            </section>
+
+            <section class="info-panel">
+              <div class="section-title">
+                <h2>Private Notes</h2>
+              </div>
+              <textarea id="privateNotes" class="notes-box" maxlength="1000" placeholder="Your private notes stay on this device."></textarea>
+            </section>
+
+            <section class="info-panel">
+              <div class="section-title">
                 <h2>How To Play</h2>
               </div>
               <ol class="how-list">
@@ -235,10 +362,32 @@
               </div>
               <div id="gameLog" class="game-log"></div>
             </section>
+
+            <section class="info-panel">
+              <div class="section-title">
+                <h2>Game History</h2>
+              </div>
+              <div id="gameHistory" class="game-log"></div>
+            </section>
           </aside>
         </div>
       </section>
     </main>
+
+    <dialog id="roleGuideDialog" class="guide-dialog">
+      <div class="dialog-content">
+        <div class="section-title">
+          <h2>Role Guide</h2>
+          <button type="button" class="ghost-button" id="closeRoleGuide">Close</button>
+        </div>
+        <div class="role-guide-list">
+          <article><strong>Mafia</strong><p>Choose one non-Mafia player to attack at night. Win when Mafia control the vote.</p></article>
+          <article><strong>Detective</strong><p>Check one player at night to learn if they are Mafia or not Mafia.</p></article>
+          <article><strong>Doctor</strong><p>Protect one player at night. If Mafia attack that player, nobody dies.</p></article>
+          <article><strong>Civilian</strong><p>Use chat, voting, and deduction to remove all Mafia.</p></article>
+        </div>
+      </div>
+    </dialog>
 
     <script src="./app.js"></script>
   </body>
