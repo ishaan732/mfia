@@ -42,6 +42,8 @@ Render settings if you create a normal Web Service instead of a Blueprint:
 
 Roles are assigned and stored on the server. The room list shows only player names and whether a chit has been seen. A player receives their role only after calling reveal with their private player token saved in their browser.
 
+Each player also gets a private reconnect code. If they refresh, switch devices, or lose their browser session, they can enter the room code, their name, and that reconnect code to recover the same seat and chit.
+
 ## Game Loop
 
 After the host starts, the app runs the Mafia flow:
@@ -50,3 +52,6 @@ After the host starts, the app runs the Mafia flow:
 - Voting starts right after night is resolved, so players discuss quickly while voting.
 - Vote: alive players vote one player out.
 - The app marks eliminated players and announces when Mafia or Civilians win.
+- Night and voting phases have countdown timers. The host can resolve early or add 30 seconds.
+- Mafia get a private night chat. Eliminated players get Dead Chat, which alive players cannot see.
+- The side Game Log records public events, and the end screen reveals every player's role.

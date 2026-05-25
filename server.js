@@ -6,6 +6,11 @@ const path = require("path");
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = __dirname;
 const rooms = new Map();
+const TIMER_SECONDS = {
+  night: 45,
+  vote: 60,
+};
+const TIMER_EXTENSION_SECONDS = 30;
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -56,8 +61,20 @@ function makeToken() {
   return crypto.randomBytes(24).toString("hex");
 }
 
+function makeReconnectCode(room) {
+  let code = "";
+  do {
+    code = String(crypto.randomInt(0, 100_000_000)).padStart(8, "0");
+  } while (room.players.some((player) => player.reconnectCode === code));
+  return code;
+}
+
 function cleanName(name, fallback) {
   return String(name || fallback).trim().slice(0, 24) || fallback;
+}
+
+function cleanReconnectCode(code) {
+  return String(code || "").replace(/\D/g, "").slice(0, 8);
 }
 
 function cleanMessage(message) {
@@ -90,16 +107,47 @@ function playerName(room, playerId) {
   return room.players.find((player) => player.id === playerId)?.name || "Nobody";
 }
 
+function phaseNameForLog(phase) {
+  return {
+    night: "night",
+    day: "day",
+    vote: "voting",
+  }[phase] || "round";
+}
+
+function setPhaseTimer(room, phase) {
+  const seconds = TIMER_SECONDS[phase] || 0;
+  room.phaseDurationSeconds = seconds;
+  room.phaseEndsAt = seconds ? Date.now() + seconds * 1000 : null;
+}
+
 function addSystemMessage(room, text) {
-  if (!room.messages) room.messages = [];
-  room.messages.push({
+  if (!room.log) room.log = [];
+  room.log.push({
     id: crypto.randomUUID(),
-    playerId: "system",
     name: "Game",
     text,
     createdAt: Date.now(),
   });
-  room.messages = room.messages.slice(-80);
+  room.log = room.log.slice(-80);
+}
+
+function addChatMessage(room, channel, player, text) {
+  const collectionName = {
+    room: "messages",
+    mafia: "mafiaMessages",
+    dead: "deadMessages",
+  }[channel];
+
+  if (!room[collectionName]) room[collectionName] = [];
+  room[collectionName].push({
+    id: crypto.randomUUID(),
+    playerId: player.id,
+    name: player.name,
+    text,
+    createdAt: Date.now(),
+  });
+  room[collectionName] = room[collectionName].slice(-80);
 }
 
 function newNightState() {
@@ -131,6 +179,7 @@ function endIfWon(room) {
 
   room.phase = "ended";
   room.winner = winner;
+  setPhaseTimer(room, "ended");
   addSystemMessage(room, `${winner} win the game.`);
   return true;
 }
@@ -156,6 +205,9 @@ function serializeRoom(room, token) {
   const myDetectiveCheck = player ? room.night?.detectiveChecks?.[player.id] : null;
   const mafiaTarget = room.night?.mafiaTargetId;
   const doctorTarget = room.night?.doctorTargetId;
+  const canSeeMafiaChat = player?.role === "Mafia" && player.seen;
+  const canUseMafiaChat = canSeeMafiaChat && player.alive && room.phase === "night";
+  const canUseDeadChat = Boolean(room.started && player && !player.alive && room.phase !== "ended");
 
   return {
     code: room.code,
@@ -164,8 +216,14 @@ function serializeRoom(room, token) {
     phase: room.phase || (room.started ? "night" : "lobby"),
     round: room.round || 0,
     winner: room.winner || null,
+    serverNow: Date.now(),
+    phaseEndsAt: room.phaseEndsAt || null,
+    phaseDurationSeconds: room.phaseDurationSeconds || 0,
     myRole: player?.seen ? player.role : null,
     myAlive: player?.alive ?? true,
+    myReconnectCode: player?.reconnectCode || null,
+    canUseMafiaChat,
+    canUseDeadChat,
     myVoteTargetId: player ? room.votes?.[player.id] || null : null,
     myNightAction: player
       ? {
@@ -189,6 +247,7 @@ function serializeRoom(room, token) {
       name: roomPlayer.name,
       seen: roomPlayer.seen,
       alive: roomPlayer.alive ?? true,
+      role: room.phase === "ended" ? roomPlayer.role : null,
       isHost: roomPlayer.id === room.hostId,
       isMe: roomPlayer.token === token,
     })),
@@ -198,6 +257,30 @@ function serializeRoom(room, token) {
       text: message.text,
       createdAt: message.createdAt,
       isMe: message.playerId === player?.id,
+    })),
+    mafiaMessages: canUseMafiaChat
+      ? (room.mafiaMessages || []).map((message) => ({
+          id: message.id,
+          name: message.name,
+          text: message.text,
+          createdAt: message.createdAt,
+          isMe: message.playerId === player?.id,
+        }))
+      : [],
+    deadMessages: canUseDeadChat
+      ? (room.deadMessages || []).map((message) => ({
+          id: message.id,
+          name: message.name,
+          text: message.text,
+          createdAt: message.createdAt,
+          isMe: message.playerId === player?.id,
+        }))
+      : [],
+    gameLog: (room.log || []).map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      text: entry.text,
+      createdAt: entry.createdAt,
     })),
   };
 }
@@ -264,6 +347,9 @@ async function handleApi(request, response) {
         },
         players: [],
         messages: [],
+        mafiaMessages: [],
+        deadMessages: [],
+        log: [],
         hostId: "",
         started: false,
         phase: "lobby",
@@ -271,18 +357,22 @@ async function handleApi(request, response) {
         winner: null,
         night: newNightState(),
         votes: {},
+        phaseEndsAt: null,
+        phaseDurationSeconds: 0,
         createdAt: Date.now(),
       };
       const player = {
         id: crypto.randomUUID(),
         name: cleanName(body.hostName, "Host"),
         token: makeToken(),
+        reconnectCode: makeReconnectCode(room),
         role: null,
         seen: false,
         alive: true,
       };
       room.hostId = player.id;
       room.players.push(player);
+      addSystemMessage(room, `${player.name} created the room.`);
       rooms.set(room.code, room);
       sendJson(response, 201, { code: room.code, token: player.token });
       return;
@@ -307,29 +397,46 @@ async function handleApi(request, response) {
       }
 
       if (request.method === "POST" && parts[3] === "join") {
+        const body = await readBody(request);
+        const name = cleanName(body.name, "Player");
+        const reconnectCode = cleanReconnectCode(body.reconnectCode);
+        if (reconnectCode) {
+          const reconnectingPlayer = room.players.find(
+            (roomPlayer) =>
+              roomPlayer.name.toLowerCase() === name.toLowerCase() &&
+              roomPlayer.reconnectCode === reconnectCode,
+          );
+          if (!reconnectingPlayer) {
+            sendJson(response, 403, { error: "No player in this room matches that name and reconnect code." });
+            return;
+          }
+          addSystemMessage(room, `${reconnectingPlayer.name} reconnected.`);
+          sendJson(response, 200, { code: room.code, token: reconnectingPlayer.token });
+          return;
+        }
         if (room.started) {
-          sendJson(response, 409, { error: "This game has already started." });
+          sendJson(response, 409, { error: "This game has already started. Enter your reconnect code to get back in." });
           return;
         }
         if (room.players.length >= room.maxPlayers) {
           sendJson(response, 409, { error: "This room is full." });
           return;
         }
-        const body = await readBody(request);
-        const name = cleanName(body.name, "Player");
         if (room.players.some((player) => player.name.toLowerCase() === name.toLowerCase())) {
-          sendJson(response, 409, { error: "That name is already in this room." });
+          sendJson(response, 409, { error: "That name is already in this room. Enter their reconnect code to rejoin." });
           return;
         }
         const player = {
           id: crypto.randomUUID(),
           name,
           token: makeToken(),
+          reconnectCode: makeReconnectCode(room),
           role: null,
           seen: false,
           alive: true,
         };
         room.players.push(player);
+        addSystemMessage(room, `${player.name} joined the room.`);
         sendJson(response, 201, { code: room.code, token: player.token });
         return;
       }
@@ -356,7 +463,11 @@ async function handleApi(request, response) {
         room.phase = "night";
         room.round = 1;
         room.winner = null;
+        room.mafiaMessages = [];
+        room.deadMessages = [];
+        room.log = [];
         clearRoundActions(room);
+        setPhaseTimer(room, "night");
         addSystemMessage(room, "Round 1 night has begun. Mafia, Detective, and Doctor can act.");
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
@@ -371,6 +482,7 @@ async function handleApi(request, response) {
         room.phase = "lobby";
         room.round = 0;
         room.winner = null;
+        setPhaseTimer(room, "lobby");
         clearRoundActions(room);
         room.players.forEach((roomPlayer) => {
           roomPlayer.role = null;
@@ -378,6 +490,10 @@ async function handleApi(request, response) {
           roomPlayer.alive = true;
         });
         room.messages = [];
+        room.mafiaMessages = [];
+        room.deadMessages = [];
+        room.log = [];
+        addSystemMessage(room, "The game was reset. Waiting for a new start.");
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
       }
@@ -468,6 +584,7 @@ async function handleApi(request, response) {
         if (!endIfWon(room)) {
           room.phase = "vote";
           room.votes = {};
+          setPhaseTimer(room, "vote");
           addSystemMessage(room, "Voting has started. Discuss quickly, then alive players should vote.");
         }
         sendJson(response, 200, serializeRoom(room, player.token));
@@ -485,7 +602,25 @@ async function handleApi(request, response) {
         }
         room.phase = "vote";
         room.votes = {};
+        setPhaseTimer(room, "vote");
         addSystemMessage(room, "Voting has started. Alive players should vote for one suspect.");
+        sendJson(response, 200, serializeRoom(room, player.token));
+        return;
+      }
+
+      if (request.method === "POST" && parts[3] === "extend-timer") {
+        if (player.id !== room.hostId) {
+          sendJson(response, 403, { error: "Only the host can extend the timer." });
+          return;
+        }
+        if (!room.started || room.phase === "lobby" || room.phase === "ended") {
+          sendJson(response, 409, { error: "There is no active timer to extend." });
+          return;
+        }
+        const baseTime = Math.max(Date.now(), room.phaseEndsAt || Date.now());
+        room.phaseEndsAt = baseTime + TIMER_EXTENSION_SECONDS * 1000;
+        room.phaseDurationSeconds = Math.ceil((room.phaseEndsAt - Date.now()) / 1000);
+        addSystemMessage(room, `The host added ${TIMER_EXTENSION_SECONDS} seconds to the ${phaseNameForLog(room.phase)} timer.`);
         sendJson(response, 200, serializeRoom(room, player.token));
         return;
       }
@@ -547,6 +682,7 @@ async function handleApi(request, response) {
           room.round = (room.round || 1) + 1;
           room.phase = "night";
           clearRoundActions(room);
+          setPhaseTimer(room, "night");
           addSystemMessage(room, `Round ${room.round} night has begun.`);
         }
         sendJson(response, 200, serializeRoom(room, player.token));
@@ -559,15 +695,26 @@ async function handleApi(request, response) {
           sendJson(response, 400, { error: "Message cannot be empty." });
           return;
         }
-        if (!room.messages) room.messages = [];
-        room.messages.push({
-          id: crypto.randomUUID(),
-          playerId: player.id,
-          name: player.name,
-          text,
-          createdAt: Date.now(),
-        });
-        room.messages = room.messages.slice(-80);
+        const channel = ["room", "mafia", "dead"].includes(body.channel) ? body.channel : "room";
+        if (channel === "mafia") {
+          if (player.role !== "Mafia" || !player.seen) {
+            sendJson(response, 403, { error: "Only revealed Mafia can use Mafia chat." });
+            return;
+          }
+          if (!player.alive || room.phase !== "night") {
+            sendJson(response, 409, { error: "Mafia chat is only open to living Mafia at night." });
+            return;
+          }
+        } else if (channel === "dead") {
+          if (!room.started || player.alive || room.phase === "ended") {
+            sendJson(response, 403, { error: "Dead chat is only for eliminated players during the game." });
+            return;
+          }
+        } else if (room.started && !player.alive && room.phase !== "ended") {
+          sendJson(response, 403, { error: "Eliminated players can read the room, but they chat in Dead Chat." });
+          return;
+        }
+        addChatMessage(room, channel, player, text);
         sendJson(response, 201, serializeRoom(room, player.token));
         return;
       }

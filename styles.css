@@ -40,6 +40,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .app-shell {
   width: min(1080px, calc(100% - 32px));
   margin: 0 auto;
@@ -207,7 +212,7 @@ select:focus {
 
 .status-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -231,10 +236,42 @@ select:focus {
   font-weight: 900;
 }
 
+.status-strip #timerCountdown {
+  font-size: 1.1rem;
+}
+
+.status-strip #timerCountdown.expired {
+  color: var(--accent-dark);
+}
+
 .status-strip small {
   color: var(--muted);
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.private-band {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(47, 111, 159, 0.28);
+  border-radius: 8px;
+  background: rgba(47, 111, 159, 0.09);
+  padding: 12px 14px;
+}
+
+.private-band span,
+.private-band small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.private-band strong {
+  color: var(--blue);
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
 }
 
 .instruction-band {
@@ -257,7 +294,7 @@ select:focus {
 }
 
 .host-actions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .player-cards {
@@ -299,6 +336,54 @@ select:focus {
   border-radius: 8px;
   background: #fff;
   padding: 18px;
+}
+
+.end-screen {
+  display: grid;
+  gap: 16px;
+  border: 1px solid rgba(189, 61, 42, 0.26);
+  border-radius: 8px;
+  background: rgba(189, 61, 42, 0.08);
+  padding: 18px;
+}
+
+.end-screen h2 {
+  font-size: 1.6rem;
+}
+
+.role-reveal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.role-reveal {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.role-reveal.dead {
+  opacity: 0.72;
+}
+
+.role-reveal strong,
+.role-reveal span,
+.role-reveal small {
+  overflow-wrap: anywhere;
+}
+
+.role-reveal span {
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.role-reveal small {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .action-panel {
@@ -387,6 +472,14 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.player-role {
+  align-self: end;
+  color: var(--accent-dark);
+  font-size: 0.86rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .seen-badge {
   color: var(--green);
   font-size: 0.78rem;
@@ -418,6 +511,29 @@ select:focus {
   text-transform: uppercase;
 }
 
+.chat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-tab {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0 12px;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.chat-tab.active {
+  border-color: var(--green);
+  background: rgba(39, 107, 88, 0.1);
+  color: var(--green);
+}
+
 .chat-messages {
   display: grid;
   align-content: start;
@@ -445,6 +561,16 @@ select:focus {
   background: rgba(39, 107, 88, 0.08);
 }
 
+.chat-message.mafia {
+  border-color: rgba(189, 61, 42, 0.22);
+  background: rgba(189, 61, 42, 0.08);
+}
+
+.chat-message.dead {
+  border-color: rgba(47, 111, 159, 0.22);
+  background: rgba(47, 111, 159, 0.08);
+}
+
 .chat-meta {
   display: flex;
   align-items: center;
@@ -469,6 +595,46 @@ select:focus {
 .empty-chat {
   color: var(--muted);
   font-weight: 750;
+}
+
+.chat-note {
+  min-height: 18px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.game-log {
+  display: grid;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.log-entry {
+  display: grid;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 9px;
+}
+
+.log-entry:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.log-entry span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.log-entry p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .hidden {
@@ -555,6 +721,7 @@ select:focus {
   .share-band,
   .host-actions,
   .chat-form,
+  .private-band,
   .action-form,
   .status-strip {
     grid-template-columns: 1fr;

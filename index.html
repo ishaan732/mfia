@@ -66,6 +66,11 @@
               <input id="joinCode" type="text" maxlength="6" placeholder="AB12CD" autocomplete="off" />
             </label>
 
+            <label class="field">
+              <span>Reconnect Code</span>
+              <input id="reconnectCode" type="text" inputmode="numeric" maxlength="8" placeholder="Optional" autocomplete="off" />
+            </label>
+
             <button type="submit" class="secondary-button">Join With Code</button>
           </form>
         </div>
@@ -116,6 +121,16 @@
             <span id="roomCode">----</span>
             <small>room code</small>
           </div>
+          <div>
+            <span id="timerCountdown">--</span>
+            <small>timer</small>
+          </div>
+        </div>
+
+        <div class="private-band">
+          <span>Private reconnect code</span>
+          <strong id="reconnectCodeDisplay">--------</strong>
+          <small>Use this with your name if you refresh, switch devices, or get disconnected.</small>
         </div>
 
         <div class="instruction-band" id="instructionBand">
@@ -127,8 +142,17 @@
           <button type="button" class="primary-button hidden" id="resolveNight">Resolve Night + Start Vote</button>
           <button type="button" class="primary-button hidden" id="startVote">Start Vote</button>
           <button type="button" class="primary-button hidden" id="resolveVote">Resolve Vote</button>
+          <button type="button" class="ghost-button hidden" id="extendTimer">Add 30s</button>
           <button type="button" class="ghost-button" id="resetGame">Reset Chits</button>
         </div>
+
+        <section class="end-screen hidden" id="endScreen">
+          <div>
+            <p class="eyebrow">Game Over</p>
+            <h2 id="winnerTitle">Winner</h2>
+          </div>
+          <div id="endRoles" class="role-reveal-grid"></div>
+        </section>
 
         <div class="game-layout">
           <div class="game-main">
@@ -159,14 +183,20 @@
                 <h2>Chat Mode</h2>
                 <span class="chat-count" id="chatCount">0 messages</span>
               </div>
+              <div class="chat-tabs" id="chatTabs">
+                <button type="button" class="chat-tab active" data-channel="room">Room</button>
+                <button type="button" class="chat-tab hidden" data-channel="mafia">Mafia</button>
+                <button type="button" class="chat-tab hidden" data-channel="dead">Dead</button>
+              </div>
               <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
               <form id="chatForm" class="chat-form">
                 <label class="field">
-                  <span>Message</span>
+                  <span id="chatInputLabel">Message</span>
                   <input id="chatInput" type="text" maxlength="160" placeholder="Type to the room" autocomplete="off" />
                 </label>
                 <button type="submit" class="primary-button">Send</button>
               </form>
+              <p class="chat-note" id="chatNote"></p>
             </section>
           </div>
 
@@ -197,6 +227,13 @@
                 <li>Host resolves vote</li>
                 <li>Repeat until Mafia or Civilians win</li>
               </ol>
+            </section>
+
+            <section class="info-panel">
+              <div class="section-title">
+                <h2>Game Log</h2>
+              </div>
+              <div id="gameLog" class="game-log"></div>
             </section>
           </aside>
         </div>

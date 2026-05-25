@@ -5,6 +5,7 @@ const joinForm = document.querySelector("#joinForm");
 const hostNameInput = document.querySelector("#hostName");
 const joinNameInput = document.querySelector("#joinName");
 const joinCodeInput = document.querySelector("#joinCode");
+const reconnectCodeInput = document.querySelector("#reconnectCode");
 const playerCountInput = document.querySelector("#playerCount");
 const mafiaCountInput = document.querySelector("#mafiaCount");
 const detectiveCountInput = document.querySelector("#detectiveCount");
@@ -17,15 +18,21 @@ const copyInvite = document.querySelector("#copyInvite");
 const joinedCount = document.querySelector("#joinedCount");
 const seenCount = document.querySelector("#seenCount");
 const roomCode = document.querySelector("#roomCode");
+const timerCountdown = document.querySelector("#timerCountdown");
+const reconnectCodeDisplay = document.querySelector("#reconnectCodeDisplay");
 const instructionBand = document.querySelector("#instructionBand");
 const hostActions = document.querySelector("#hostActions");
 const startGame = document.querySelector("#startGame");
 const resolveNight = document.querySelector("#resolveNight");
 const startVote = document.querySelector("#startVote");
 const resolveVote = document.querySelector("#resolveVote");
+const extendTimer = document.querySelector("#extendTimer");
 const resetGame = document.querySelector("#resetGame");
 const leaveRoom = document.querySelector("#leaveRoom");
 const playerCards = document.querySelector("#playerCards");
+const endScreen = document.querySelector("#endScreen");
+const winnerTitle = document.querySelector("#winnerTitle");
+const endRoles = document.querySelector("#endRoles");
 const myChitPanel = document.querySelector("#myChitPanel");
 const myName = document.querySelector("#myName");
 const chitCard = document.querySelector("#chitCard");
@@ -34,13 +41,17 @@ const roleName = document.querySelector("#roleName");
 const roleHint = document.querySelector("#roleHint");
 const revealChit = document.querySelector("#revealChit");
 const chatCount = document.querySelector("#chatCount");
+const chatTabs = document.querySelector("#chatTabs");
 const chatMessages = document.querySelector("#chatMessages");
 const chatForm = document.querySelector("#chatForm");
+const chatInputLabel = document.querySelector("#chatInputLabel");
 const chatInput = document.querySelector("#chatInput");
+const chatNote = document.querySelector("#chatNote");
 const actionPanel = document.querySelector("#actionPanel");
 const actionTitle = document.querySelector("#actionTitle");
 const actionBody = document.querySelector("#actionBody");
 const phaseLabel = document.querySelector("#phaseLabel");
+const gameLog = document.querySelector("#gameLog");
 
 const ROLE_DETAILS = {
   Mafia: {
@@ -65,9 +76,17 @@ const ROLE_DETAILS = {
   },
 };
 
-let session = JSON.parse(localStorage.getItem("chitMafiaSession") || "null");
+let session = null;
 let pollId = null;
-let lastMessageId = "";
+let timerId = null;
+let lastRoom = null;
+let activeChatChannel = "room";
+let serverClockOffset = 0;
+const lastMessageIds = {
+  room: "",
+  mafia: "",
+  dead: "",
+};
 
 function clampNumber(input, min, max) {
   const value = Number.parseInt(input.value, 10);
@@ -85,16 +104,46 @@ function normalizeCreateValues() {
   clampNumber(doctorCountInput, 0, doctorMax);
 }
 
+function readSessionStore() {
+  const store = JSON.parse(localStorage.getItem("chitMafiaSessions") || "{}");
+  const legacySession = JSON.parse(localStorage.getItem("chitMafiaSession") || "null");
+  if (legacySession?.code && !store[legacySession.code]) {
+    store[legacySession.code] = legacySession;
+  }
+  return store;
+}
+
+function writeSessionStore(store) {
+  localStorage.setItem("chitMafiaSessions", JSON.stringify(store));
+}
+
+function savedSessionFor(code) {
+  if (!code) return null;
+  return readSessionStore()[code.toUpperCase()] || null;
+}
+
 function saveSession(nextSession) {
   session = nextSession;
+  const store = readSessionStore();
+  store[session.code] = session;
+  writeSessionStore(store);
   localStorage.setItem("chitMafiaSession", JSON.stringify(session));
 }
 
 function clearSession() {
+  const code = session?.code;
   session = null;
+  if (code) {
+    const store = readSessionStore();
+    delete store[code];
+    writeSessionStore(store);
+  }
   localStorage.removeItem("chitMafiaSession");
   if (pollId) window.clearInterval(pollId);
+  if (timerId) window.clearInterval(timerId);
   pollId = null;
+  timerId = null;
+  lastRoom = null;
 }
 
 async function requestJson(path, options = {}) {
@@ -148,26 +197,89 @@ function renderHiddenChit() {
   revealChit.textContent = "Reveal My Chit";
 }
 
-function renderChat(messages = []) {
+function chatConfigFor(room, me) {
+  const roomLocked = Boolean(room.started && me && !me.alive && room.phase !== "ended");
+  const channels = [
+    {
+      id: "room",
+      label: "Room",
+      inputLabel: "Room message",
+      placeholder: roomLocked ? "Eliminated players use Dead Chat" : "Type to the room",
+      messages: room.messages || [],
+      canSend: !roomLocked,
+      note: roomLocked
+        ? "You can read the room chat, but eliminated players only send messages in Dead Chat."
+        : "Everyone in the room can see this chat.",
+    },
+  ];
+
+  if (room.canUseMafiaChat || room.mafiaMessages?.length) {
+    channels.push({
+      id: "mafia",
+      label: "Mafia",
+      inputLabel: "Mafia message",
+      placeholder: room.canUseMafiaChat ? "Plan with Mafia" : "Mafia chat opens at night",
+      messages: room.mafiaMessages || [],
+      canSend: room.canUseMafiaChat,
+      note: "Only revealed Mafia can see this chat.",
+    });
+  }
+
+  if (room.canUseDeadChat || room.deadMessages?.length) {
+    channels.push({
+      id: "dead",
+      label: "Dead",
+      inputLabel: "Dead chat message",
+      placeholder: room.canUseDeadChat ? "Talk with eliminated players" : "Dead chat is closed",
+      messages: room.deadMessages || [],
+      canSend: room.canUseDeadChat,
+      note: "Only eliminated players can see Dead Chat during the game.",
+    });
+  }
+
+  if (!channels.some((channel) => channel.id === activeChatChannel)) {
+    activeChatChannel = room.canUseDeadChat ? "dead" : "room";
+  }
+
+  return channels;
+}
+
+function renderChatPanel(room, me) {
+  const channels = chatConfigFor(room, me);
+  const activeConfig = channels.find((channel) => channel.id === activeChatChannel) || channels[0];
+  const messages = activeConfig.messages;
   const shouldStickToBottom =
     chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 60;
   const newestMessage = messages.at(-1)?.id || "";
 
+  chatTabs.querySelectorAll(".chat-tab").forEach((tab) => {
+    const channel = channels.find((item) => item.id === tab.dataset.channel);
+    tab.classList.toggle("hidden", !channel);
+    tab.classList.toggle("active", activeConfig.id === tab.dataset.channel);
+    tab.disabled = !channel;
+    if (channel) tab.textContent = channel.label;
+  });
+
   chatCount.textContent = `${messages.length} ${messages.length === 1 ? "message" : "messages"}`;
+  chatInputLabel.textContent = activeConfig.inputLabel;
+  chatInput.placeholder = activeConfig.placeholder;
+  chatInput.disabled = !activeConfig.canSend;
+  chatForm.querySelector("button").disabled = !activeConfig.canSend;
+  chatNote.textContent = activeConfig.note;
   chatMessages.innerHTML = "";
 
   if (messages.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-chat";
-    empty.textContent = "No chat messages yet.";
+    empty.textContent = `No ${activeConfig.label.toLowerCase()} messages yet.`;
     chatMessages.append(empty);
-    lastMessageId = "";
+    lastMessageIds[activeConfig.id] = "";
     return;
   }
 
   messages.forEach((message) => {
     const item = document.createElement("article");
-    item.className = `chat-message${message.isMe ? " mine" : ""}`;
+    item.className = `chat-message ${activeConfig.id}${message.isMe ? " mine" : ""}`;
 
     const meta = document.createElement("div");
     meta.className = "chat-meta";
@@ -189,10 +301,10 @@ function renderChat(messages = []) {
     chatMessages.append(item);
   });
 
-  if (shouldStickToBottom || newestMessage !== lastMessageId) {
+  if (shouldStickToBottom || newestMessage !== lastMessageIds[activeConfig.id]) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-  lastMessageId = newestMessage;
+  lastMessageIds[activeConfig.id] = newestMessage;
 }
 
 function phaseName(phase) {
@@ -203,6 +315,86 @@ function phaseName(phase) {
     vote: "Voting",
     ended: "Game Over",
   }[phase] || "Room";
+}
+
+function formatSeconds(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function updateTimerDisplay() {
+  if (!lastRoom?.phaseEndsAt) {
+    timerCountdown.textContent = "--";
+    timerCountdown.classList.remove("expired");
+    return;
+  }
+  const remainingMs = lastRoom.phaseEndsAt - (Date.now() + serverClockOffset);
+  if (remainingMs <= 0) {
+    timerCountdown.textContent = "Time up";
+    timerCountdown.classList.add("expired");
+    return;
+  }
+  timerCountdown.textContent = formatSeconds(Math.ceil(remainingMs / 1000));
+  timerCountdown.classList.remove("expired");
+}
+
+function startTimer() {
+  if (timerId) window.clearInterval(timerId);
+  updateTimerDisplay();
+  timerId = window.setInterval(updateTimerDisplay, 500);
+}
+
+function renderGameLog(entries = []) {
+  gameLog.innerHTML = "";
+  if (entries.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-chat";
+    empty.textContent = "No game events yet.";
+    gameLog.append(empty);
+    return;
+  }
+
+  entries.slice(-12).reverse().forEach((entry) => {
+    const item = document.createElement("article");
+    item.className = "log-entry";
+
+    const time = document.createElement("span");
+    time.textContent = new Date(entry.createdAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const text = document.createElement("p");
+    text.textContent = entry.text;
+
+    item.append(time, text);
+    gameLog.append(item);
+  });
+}
+
+function renderEndScreen(room) {
+  endScreen.classList.toggle("hidden", room.phase !== "ended");
+  if (room.phase !== "ended") return;
+
+  winnerTitle.textContent = `${room.winner} Win`;
+  endRoles.innerHTML = "";
+  room.players.forEach((player) => {
+    const item = document.createElement("article");
+    item.className = `role-reveal ${player.alive ? "alive" : "dead"}`;
+
+    const name = document.createElement("strong");
+    name.textContent = player.isMe ? `${player.name} (you)` : player.name;
+
+    const role = document.createElement("span");
+    role.textContent = player.role || "Unknown";
+
+    const status = document.createElement("small");
+    status.textContent = player.alive ? "Survived" : "Eliminated";
+
+    item.append(name, role, status);
+    endRoles.append(item);
+  });
 }
 
 function createPlayerSelect(players, filterPlayer, selectedId = "") {
@@ -278,7 +470,7 @@ function renderActionPanel(room, me) {
   }
 
   if (!me.alive) {
-    addActionText("You have been eliminated. You can still watch and chat, but you cannot act or vote.");
+    addActionText("You have been eliminated. You can watch the game and use Dead Chat, but you cannot act or vote.");
     return;
   }
 
@@ -347,36 +539,47 @@ function renderActionPanel(room, me) {
 }
 
 function renderRoom(room) {
+  lastRoom = room;
+  serverClockOffset = (room.serverNow || Date.now()) - Date.now();
+  startTimer();
+
   const me = room.players.find((player) => player.isMe);
   const isHost = me?.isHost;
 
   const phase = room.phase || (room.started ? "night" : "lobby");
   roomKicker.textContent = phaseName(phase);
-  roomTitle.textContent = phase === "lobby" ? "Waiting Room" : `Round ${room.round || 1}`;
+  roomTitle.textContent = phase === "lobby"
+    ? "Waiting Room"
+    : phase === "ended"
+      ? "Game Over"
+      : `Round ${room.round || 1}`;
   roomCode.textContent = room.code;
   joinedCount.textContent = `${room.players.length}/${room.maxPlayers}`;
   seenCount.textContent = room.players.filter((player) => player.seen).length;
   inviteLink.value = roomUrl(room.code);
+  reconnectCodeDisplay.textContent = room.myReconnectCode || "--------";
   hostActions.classList.toggle("hidden", !isHost);
   myChitPanel.classList.toggle("hidden", !room.started || !me);
   startGame.classList.toggle("hidden", room.started);
   resolveNight.classList.toggle("hidden", phase !== "night");
   startVote.classList.toggle("hidden", phase !== "day");
   resolveVote.classList.toggle("hidden", phase !== "vote");
+  extendTimer.classList.toggle("hidden", !room.started || phase === "lobby" || phase === "ended");
   startGame.disabled = room.started;
   resolveNight.disabled = !room.started || phase !== "night";
   startVote.disabled = !room.started || phase !== "day";
   resolveVote.disabled = !room.started || phase !== "vote";
+  extendTimer.disabled = !room.started || phase === "lobby" || phase === "ended";
   resetGame.disabled = !room.started;
 
   if (phase === "ended") {
     instructionBand.textContent = `${room.winner} win. The host can reset chits to play again.`;
   } else if (phase === "night") {
-    instructionBand.textContent = "Night phase: role players choose actions privately, then the host resolves night and starts voting.";
+    instructionBand.textContent = "Night phase: role players choose privately before the timer ends, then the host resolves night and starts voting.";
   } else if (phase === "day") {
     instructionBand.textContent = "Day phase: discuss in chat, then the host starts voting.";
   } else if (phase === "vote") {
-    instructionBand.textContent = "Voting phase: discuss quickly, vote, then the host resolves voting.";
+    instructionBand.textContent = "Voting phase: discuss quickly, vote before the timer ends, then the host resolves voting.";
   } else {
     instructionBand.textContent = isHost
       ? "Share the invite link, then start when everyone is in."
@@ -393,7 +596,9 @@ function renderRoom(room) {
     renderHiddenChit();
   }
 
-  renderChat(room.messages);
+  renderChatPanel(room, me);
+  renderGameLog(room.gameLog);
+  renderEndScreen(room);
   renderActionPanel(room, me);
 
   playerCards.innerHTML = "";
@@ -418,6 +623,12 @@ function renderRoom(room) {
 
     topLine.append(number, badge);
     card.append(topLine, name);
+    if (phase === "ended" && player.role) {
+      const role = document.createElement("span");
+      role.className = "player-role";
+      role.textContent = player.role;
+      card.append(role);
+    }
     playerCards.append(card);
   });
 }
@@ -472,9 +683,13 @@ joinForm.addEventListener("submit", async (event) => {
     const code = joinCodeInput.value.trim().toUpperCase();
     const room = await requestJson(`/api/rooms/${code}/join`, {
       method: "POST",
-      body: JSON.stringify({ name: joinNameInput.value.trim() || "Player" }),
+      body: JSON.stringify({
+        name: joinNameInput.value.trim() || "Player",
+        reconnectCode: reconnectCodeInput.value.trim(),
+      }),
     });
     saveSession({ code: room.code, token: room.token });
+    reconnectCodeInput.value = "";
     window.history.replaceState({}, "", roomUrl(room.code));
     await refreshRoom();
     startPolling();
@@ -510,6 +725,7 @@ async function runHostCommand(endpoint) {
 resolveNight.addEventListener("click", () => runHostCommand("resolve-night"));
 startVote.addEventListener("click", () => runHostCommand("start-vote"));
 resolveVote.addEventListener("click", () => runHostCommand("resolve-vote"));
+extendTimer.addEventListener("click", () => runHostCommand("extend-timer"));
 
 resetGame.addEventListener("click", async () => {
   try {
@@ -548,12 +764,23 @@ chatForm.addEventListener("submit", async (event) => {
       body: JSON.stringify({
         token: session.token,
         message,
+        channel: activeChatChannel,
       }),
     });
     renderRoom(room);
   } catch (error) {
     instructionBand.textContent = error.message;
     chatInput.value = message;
+  }
+});
+
+chatTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest(".chat-tab");
+  if (!tab || tab.disabled) return;
+  activeChatChannel = tab.dataset.channel;
+  if (lastRoom) {
+    const me = lastRoom.players.find((player) => player.isMe);
+    renderChatPanel(lastRoom, me);
   }
 });
 
@@ -578,7 +805,11 @@ leaveRoom.addEventListener("click", () => {
 
 const inviteCode = new URLSearchParams(window.location.search).get("room");
 if (inviteCode) {
-  joinCodeInput.value = inviteCode.toUpperCase();
+  const normalizedCode = inviteCode.toUpperCase();
+  joinCodeInput.value = normalizedCode;
+  session = savedSessionFor(normalizedCode);
+} else {
+  session = JSON.parse(localStorage.getItem("chitMafiaSession") || "null");
 }
 
 normalizeCreateValues();
