@@ -25,6 +25,7 @@ const joinedCount = document.querySelector("#joinedCount");
 const seenCount = document.querySelector("#seenCount");
 const roomCode = document.querySelector("#roomCode");
 const timerCountdown = document.querySelector("#timerCountdown");
+const timerProgress = document.querySelector("#timerProgress");
 const spectatorCount = document.querySelector("#spectatorCount");
 const reconnectCodeDisplay = document.querySelector("#reconnectCodeDisplay");
 const instructionBand = document.querySelector("#instructionBand");
@@ -426,17 +427,22 @@ function updateTimerDisplay() {
   if (!lastRoom?.phaseEndsAt) {
     timerCountdown.textContent = "--";
     timerCountdown.classList.remove("expired");
+    timerProgress.style.width = "0%";
     return;
   }
   const remainingMs = lastRoom.phaseEndsAt - (Date.now() + serverClockOffset);
   if (remainingMs <= 0) {
     timerCountdown.textContent = "Time up";
     timerCountdown.classList.add("expired");
+    timerProgress.style.width = "0%";
     return;
   }
   const secondsLeft = Math.ceil(remainingMs / 1000);
   timerCountdown.textContent = formatSeconds(secondsLeft);
   timerCountdown.classList.remove("expired");
+  const durationMs = Math.max(1, (lastRoom.phaseDurationSeconds || secondsLeft) * 1000);
+  const percent = Math.max(0, Math.min(100, (remainingMs / durationMs) * 100));
+  timerProgress.style.width = `${percent}%`;
   const warningKey = `${lastRoom.code}:${lastRoom.phase}:${lastRoom.round}`;
   if (secondsLeft <= 10 && warningKey !== lastWarningKey) {
     lastWarningKey = warningKey;
@@ -719,6 +725,8 @@ function renderRoom(room) {
   const me = room.players.find((player) => player.isMe);
   const isHost = me?.isHost;
   const phase = room.phase || (room.started ? "night" : "lobby");
+  gamePanel.dataset.phase = phase;
+  document.body.dataset.phase = phase;
   const phaseKey = `${room.code}:${phase}:${room.round}:${room.winner || ""}`;
   if (lastPhaseKey && phaseKey !== lastPhaseKey) {
     playTone("phase");
@@ -806,12 +814,20 @@ function renderRoom(room) {
       ? player.alive ? (player.seen ? "Seen" : "Hidden") : "Out"
       : player.ready ? "Ready" : "Not ready";
 
+    const identity = document.createElement("div");
+    identity.className = "player-identity";
+
+    const avatar = document.createElement("span");
+    avatar.className = "player-avatar";
+    avatar.textContent = player.name.trim().slice(0, 1).toUpperCase() || "?";
+
     const name = document.createElement("div");
     name.className = "player-name";
     name.textContent = player.isMe ? `${player.name} (you)` : player.name;
+    identity.append(avatar, name);
 
     topLine.append(number, badge);
-    card.append(topLine, name);
+    card.append(topLine, identity);
     if (player.muted) {
       const muted = document.createElement("span");
       muted.className = "player-role";
