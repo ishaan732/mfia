@@ -126,6 +126,7 @@ let uploadedImage = "";
 let activeSort = "recent";
 let activeView = "all";
 let toastTimer;
+let newestPostId = "";
 
 const feedGrid = qs("#feedGrid");
 const template = qs("#postTemplate");
@@ -240,6 +241,14 @@ function setAppStatus(message, tone, hideDelay) {
   }
 }
 
+function showFeedNotice(title, text) {
+  const notice = qs("#feedNotice");
+  if (!notice) return;
+  qs("#feedNoticeTitle").textContent = title;
+  qs("#feedNoticeText").textContent = text;
+  notice.hidden = false;
+}
+
 function myPosts() {
   return state.posts.filter(isMine);
 }
@@ -348,6 +357,7 @@ function renderPosts() {
 
   posts.forEach((post) => {
     const node = template.content.firstElementChild.cloneNode(true);
+    node.classList.toggle("new-post", post.id === newestPostId);
     node.querySelector(".photo").src = post.image;
     node.querySelector(".photo").alt = post.title;
     node.querySelector(".tag").textContent = isMine(post) ? `Yours - ${post.category}` : post.category;
@@ -403,6 +413,7 @@ function saveProfileFromForm() {
   updateProfileUI();
   renderPosts();
   showToast(persisted ? "Profile saved." : "Profile saved for this session.");
+  setAppStatus("Profile saved.", "ready", 3000);
   closeProfileDialog();
 }
 
@@ -476,7 +487,8 @@ function bindEvents() {
       qs(".upload-empty").style.display = "none";
       qs("#uploadStatus").textContent = `${file.name} added. Add the settings, then press Publish to LensLog.`;
       qs("#uploadStatus").classList.add("ready");
-      showToast("Picture added.");
+      setAppStatus("Picture selected. Press Publish to add it to Feed.", "ready", 5000);
+      showToast("Picture selected.");
     };
     reader.onerror = () => {
       uploadedImage = "";
@@ -517,6 +529,7 @@ function bindEvents() {
       createdAt: Date.now()
     };
     state.posts = [post, ...state.posts];
+    newestPostId = post.id;
     const persisted = saveState();
     event.target.reset();
     uploadedImage = "";
@@ -534,7 +547,11 @@ function bindEvents() {
     document.querySelectorAll("[data-view]").forEach((item) => item.classList.toggle("active", item.dataset.view === "all"));
     updateProfileUI();
     renderPosts();
-    showToast(persisted ? "Photo published to the Feed and your profile." : "Photo published for this session.");
+    showFeedNotice("New shot added", `"${post.title}" is now visible in Feed and My shared shots.`);
+    qs("#profileStatus").textContent = `New shot added. Shared shots: ${myPosts().length}.`;
+    qs("#profileStatus").classList.add("ready");
+    setAppStatus("New shot added to Feed and Profile.", "ready");
+    showToast(persisted ? "New shot added." : "New shot added for this session.");
     qs("#feed").scrollIntoView({ behavior: "smooth" });
   });
 

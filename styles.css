@@ -402,6 +402,32 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.notice-banner {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-left: 5px solid var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.notice-banner[hidden] {
+  display: none;
+}
+
+.notice-banner strong {
+  color: var(--accent-dark);
+}
+
+.notice-banner span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .segmented {
   display: flex;
   gap: 4px;
@@ -420,6 +446,11 @@ textarea:focus {
 
 .photo-card {
   overflow: hidden;
+}
+
+.photo-card.new-post {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent), var(--shadow);
 }
 
 .photo-wrap {
