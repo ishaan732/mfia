@@ -1,1157 +1,574 @@
-const homePanel = document.querySelector("#homePanel");
-const gamePanel = document.querySelector("#gamePanel");
-const createForm = document.querySelector("#createForm");
-const joinForm = document.querySelector("#joinForm");
-const hostNameInput = document.querySelector("#hostName");
-const joinNameInput = document.querySelector("#joinName");
-const joinCodeInput = document.querySelector("#joinCode");
-const reconnectCodeInput = document.querySelector("#reconnectCode");
-const createPasswordInput = document.querySelector("#createPassword");
-const joinPasswordInput = document.querySelector("#joinPassword");
-const playerCountInput = document.querySelector("#playerCount");
-const mafiaCountInput = document.querySelector("#mafiaCount");
-const detectiveCountInput = document.querySelector("#detectiveCount");
-const doctorCountInput = document.querySelector("#doctorCount");
-const nightSecondsInput = document.querySelector("#nightSeconds");
-const voteSecondsInput = document.querySelector("#voteSeconds");
-const maxRoundsInput = document.querySelector("#maxRounds");
-const autoResolveInput = document.querySelector("#autoResolve");
-const errorMessage = document.querySelector("#errorMessage");
-const roomKicker = document.querySelector("#roomKicker");
-const roomTitle = document.querySelector("#roomTitle");
-const inviteLink = document.querySelector("#inviteLink");
-const copyInvite = document.querySelector("#copyInvite");
-const joinedCount = document.querySelector("#joinedCount");
-const seenCount = document.querySelector("#seenCount");
-const roomCode = document.querySelector("#roomCode");
-const timerCountdown = document.querySelector("#timerCountdown");
-const timerProgress = document.querySelector("#timerProgress");
-const spectatorCount = document.querySelector("#spectatorCount");
-const reconnectCodeDisplay = document.querySelector("#reconnectCodeDisplay");
-const instructionBand = document.querySelector("#instructionBand");
-const hostActions = document.querySelector("#hostActions");
-const startGame = document.querySelector("#startGame");
-const resolveNight = document.querySelector("#resolveNight");
-const startVote = document.querySelector("#startVote");
-const resolveVote = document.querySelector("#resolveVote");
-const extendTimer = document.querySelector("#extendTimer");
-const resetGame = document.querySelector("#resetGame");
-const readyButton = document.querySelector("#readyButton");
-const leaveRoom = document.querySelector("#leaveRoom");
-const playerCards = document.querySelector("#playerCards");
-const hostSettings = document.querySelector("#hostSettings");
-const passwordState = document.querySelector("#passwordState");
-const settingsMaxPlayers = document.querySelector("#settingsMaxPlayers");
-const settingsMafia = document.querySelector("#settingsMafia");
-const settingsDetective = document.querySelector("#settingsDetective");
-const settingsDoctor = document.querySelector("#settingsDoctor");
-const settingsNightSeconds = document.querySelector("#settingsNightSeconds");
-const settingsVoteSeconds = document.querySelector("#settingsVoteSeconds");
-const settingsMaxRounds = document.querySelector("#settingsMaxRounds");
-const settingsPassword = document.querySelector("#settingsPassword");
-const settingsAutoResolve = document.querySelector("#settingsAutoResolve");
-const saveSettings = document.querySelector("#saveSettings");
-const endScreen = document.querySelector("#endScreen");
-const winnerTitle = document.querySelector("#winnerTitle");
-const endRoles = document.querySelector("#endRoles");
-const voteResultsPanel = document.querySelector("#voteResultsPanel");
-const voteResultsRound = document.querySelector("#voteResultsRound");
-const voteResultsList = document.querySelector("#voteResultsList");
-const myChitPanel = document.querySelector("#myChitPanel");
-const myName = document.querySelector("#myName");
-const chitCard = document.querySelector("#chitCard");
-const roleIcon = document.querySelector("#roleIcon");
-const roleName = document.querySelector("#roleName");
-const roleHint = document.querySelector("#roleHint");
-const revealChit = document.querySelector("#revealChit");
-const chatCount = document.querySelector("#chatCount");
-const chatTabs = document.querySelector("#chatTabs");
-const chatMessages = document.querySelector("#chatMessages");
-const chatForm = document.querySelector("#chatForm");
-const chatInputLabel = document.querySelector("#chatInputLabel");
-const chatInput = document.querySelector("#chatInput");
-const chatNote = document.querySelector("#chatNote");
-const actionPanel = document.querySelector("#actionPanel");
-const actionTitle = document.querySelector("#actionTitle");
-const actionBody = document.querySelector("#actionBody");
-const phaseLabel = document.querySelector("#phaseLabel");
-const gameLog = document.querySelector("#gameLog");
-const spectateRoom = document.querySelector("#spectateRoom");
-const openRoleGuide = document.querySelector("#openRoleGuide");
-const closeRoleGuide = document.querySelector("#closeRoleGuide");
-const roleGuideDialog = document.querySelector("#roleGuideDialog");
-const themeSelect = document.querySelector("#themeSelect");
-const soundToggle = document.querySelector("#soundToggle");
-const qrImage = document.querySelector("#qrImage");
-const privateNotes = document.querySelector("#privateNotes");
-const gameHistory = document.querySelector("#gameHistory");
+const STORAGE_KEY = "lenslog-state-v1";
+const USER_ID_KEY = "lenslog-local-user-id";
+const memoryStore = {};
+const uid = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const ROLE_DETAILS = {
-  Mafia: {
-    icon: "M",
-    color: "#f2c4bc",
-    hint: "Work with any other Mafia. Stay hidden during discussion.",
+function readStored(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memoryStore[key] || null;
+  }
+}
+
+function writeStored(key, value) {
+  memoryStore[key] = value;
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getLocalUserId() {
+  const saved = readStored(USER_ID_KEY);
+  if (saved) return saved;
+  const next = `local-${uid()}`;
+  writeStored(USER_ID_KEY, next);
+  return next;
+}
+
+const localUserId = getLocalUserId();
+
+const samplePosts = [
+  {
+    id: uid(),
+    sample: true,
+    title: "Rain trails in Colaba",
+    location: "Mumbai, India",
+    camera: "Fujifilm X-T5",
+    lens: "23mm f/2",
+    iso: "800",
+    aperture: "f/2.8",
+    shutter: "1/160s",
+    category: "Street",
+    story: "I waited for the taxi headlights to hit the wet road and kept the frame low.",
+    author: "Anaya Rao",
+    image: "https://images.unsplash.com/photo-1519413275793-7d0f5c4bf5d0?auto=format&fit=crop&w=1200&q=84",
+    likes: 32,
+    createdAt: Date.now() - 1000 * 60 * 60 * 3
   },
-  Detective: {
-    icon: "D",
-    color: "#c4dded",
-    hint: "Secretly investigate one player during night rounds.",
+  {
+    id: uid(),
+    sample: true,
+    title: "Blue hour above Pangong",
+    location: "Ladakh, India",
+    camera: "Nikon Z8",
+    lens: "24-70mm f/2.8",
+    iso: "200",
+    aperture: "f/8",
+    shutter: "1/80s",
+    category: "Landscape",
+    story: "The air was clear after sunset, so I underexposed a little to keep the mountain edges clean.",
+    author: "Kabir Sen",
+    image: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=84",
+    likes: 57,
+    createdAt: Date.now() - 1000 * 60 * 60 * 10
   },
-  Doctor: {
-    icon: "+",
-    color: "#cbe6d9",
-    hint: "Secretly protect one player during night rounds.",
+  {
+    id: uid(),
+    sample: true,
+    title: "Window light portrait",
+    location: "Bengaluru, India",
+    camera: "Canon R6 Mark II",
+    lens: "50mm f/1.4",
+    iso: "400",
+    aperture: "f/1.8",
+    shutter: "1/320s",
+    category: "Portrait",
+    story: "Soft curtain light did most of the work. I focused on the near eye and kept the background simple.",
+    author: "Meera Iyer",
+    image: "https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?auto=format&fit=crop&w=1200&q=84",
+    likes: 44,
+    createdAt: Date.now() - 1000 * 60 * 60 * 18
   },
-  Civilian: {
-    icon: "C",
-    color: "#f0dfb8",
-    hint: "Find the Mafia through discussion and voting.",
+  {
+    id: uid(),
+    sample: true,
+    title: "Heron at first light",
+    location: "Keoladeo, India",
+    camera: "Sony A1",
+    lens: "200-600mm",
+    iso: "1250",
+    aperture: "f/6.3",
+    shutter: "1/2000s",
+    category: "Wildlife",
+    story: "Fast shutter, quiet mode, and a patient crouch near the reeds caught the takeoff.",
+    author: "Dev Malhotra",
+    image: "https://images.unsplash.com/photo-1515705576963-95cad62945b6?auto=format&fit=crop&w=1200&q=84",
+    likes: 71,
+    createdAt: Date.now() - 1000 * 60 * 60 * 24
+  }
+];
+
+const defaultState = {
+  userId: localUserId,
+  profile: {
+    name: "",
+    email: "",
+    camera: "",
+    location: ""
   },
+  posts: samplePosts,
+  liked: [],
+  theme: "light"
 };
 
-let session = null;
-let pollId = null;
-let timerId = null;
-let lastRoom = null;
-let activeChatChannel = "room";
-let serverClockOffset = 0;
-let lastPhaseKey = "";
-let lastWarningKey = "";
-let audioContext = null;
-const lastMessageIds = {
-  room: "",
-  mafia: "",
-  dead: "",
-};
+const sampleSignatures = new Set(samplePosts.map((post) => `${post.title}|${post.author}`));
 
-function clampNumber(input, min, max) {
-  const value = Number.parseInt(input.value, 10);
-  const clamped = Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
-  input.value = clamped;
-  return clamped;
-}
+const qs = (selector) => document.querySelector(selector);
+const clone = (value) => JSON.parse(JSON.stringify(value));
 
-function normalizeCreateValues() {
-  const maxPlayers = clampNumber(playerCountInput, 1, 10);
-  const mafia = clampNumber(mafiaCountInput, 0, maxPlayers);
-  const detectiveMax = Math.min(1, Math.max(0, maxPlayers - mafia));
-  const detective = clampNumber(detectiveCountInput, 0, detectiveMax);
-  const doctorMax = Math.min(1, Math.max(0, maxPlayers - mafia - detective));
-  clampNumber(doctorCountInput, 0, doctorMax);
-  clampNumber(nightSecondsInput, 10, 300);
-  clampNumber(voteSecondsInput, 10, 300);
-  clampNumber(maxRoundsInput, 0, 20);
-}
+let state = loadState();
+let uploadedImage = "";
+let activeSort = "recent";
+let activeView = "all";
+let toastTimer;
 
-function normalizeSettingsValues() {
-  const maxPlayers = clampNumber(settingsMaxPlayers, Math.max(1, lastRoom?.players?.length || 1), 10);
-  const mafia = clampNumber(settingsMafia, maxPlayers > 1 ? 1 : 0, maxPlayers);
-  const detectiveMax = Math.min(1, Math.max(0, maxPlayers - mafia));
-  const detective = clampNumber(settingsDetective, 0, detectiveMax);
-  const doctorMax = Math.min(1, Math.max(0, maxPlayers - mafia - detective));
-  clampNumber(settingsDoctor, 0, doctorMax);
-  clampNumber(settingsNightSeconds, 10, 300);
-  clampNumber(settingsVoteSeconds, 10, 300);
-  clampNumber(settingsMaxRounds, 0, 20);
-}
+const feedGrid = qs("#feedGrid");
+const template = qs("#postTemplate");
+const authDialog = qs("#authDialog");
 
-function readSessionStore() {
-  const store = JSON.parse(localStorage.getItem("chitMafiaSessions") || "{}");
-  const legacySession = JSON.parse(localStorage.getItem("chitMafiaSession") || "null");
-  if (legacySession?.code && !store[legacySession.code]) {
-    store[legacySession.code] = legacySession;
+function loadState() {
+  try {
+    const saved = JSON.parse(readStored(STORAGE_KEY));
+    if (!saved) return clone(defaultState);
+    const merged = {
+      ...clone(defaultState),
+      ...saved,
+      userId: saved.userId || localUserId,
+      profile: {
+        ...clone(defaultState.profile),
+        ...(saved.profile || {})
+      },
+      liked: saved.liked || []
+    };
+    merged.posts = (saved.posts && saved.posts.length ? saved.posts : samplePosts).map((post) => migratePost(post, merged.userId));
+    return merged;
+  } catch {
+    return clone(defaultState);
   }
-  return store;
 }
 
-function writeSessionStore(store) {
-  localStorage.setItem("chitMafiaSessions", JSON.stringify(store));
+function saveState() {
+  return writeStored(STORAGE_KEY, JSON.stringify(state));
 }
 
-function savedSessionFor(code) {
-  if (!code) return null;
-  return readSessionStore()[code.toUpperCase()] || null;
-}
-
-function saveSession(nextSession) {
-  session = nextSession;
-  const store = readSessionStore();
-  store[session.code] = session;
-  writeSessionStore(store);
-  localStorage.setItem("chitMafiaSession", JSON.stringify(session));
-  loadPrivateNotes();
-}
-
-function clearSession() {
-  const code = session?.code;
-  session = null;
-  if (code) {
-    const store = readSessionStore();
-    delete store[code];
-    writeSessionStore(store);
-  }
-  localStorage.removeItem("chitMafiaSession");
-  if (pollId) window.clearInterval(pollId);
-  if (timerId) window.clearInterval(timerId);
-  pollId = null;
-  timerId = null;
-  lastRoom = null;
-  privateNotes.value = "";
-}
-
-async function requestJson(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || "Something went wrong.");
-  }
-  return data;
-}
-
-function showHome(message = "") {
-  homePanel.classList.remove("hidden");
-  gamePanel.classList.add("hidden");
-  errorMessage.textContent = message;
-}
-
-function showGameShell() {
-  homePanel.classList.add("hidden");
-  gamePanel.classList.remove("hidden");
-  errorMessage.textContent = "";
-}
-
-function roomUrl(code) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("room", code);
-  return url.toString();
-}
-
-function notesKey() {
-  return session ? `chitMafiaNotes:${session.code}:${session.token}` : "";
-}
-
-function loadPrivateNotes() {
-  privateNotes.value = notesKey() ? localStorage.getItem(notesKey()) || "" : "";
-}
-
-function playTone(type) {
-  if (!soundToggle.checked) return;
-  audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-  const frequency = { phase: 620, message: 420, warning: 880 }[type] || 520;
-  oscillator.frequency.value = frequency;
-  oscillator.type = "sine";
-  gain.gain.setValueAtTime(0.001, audioContext.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.18);
-  oscillator.connect(gain);
-  gain.connect(audioContext.destination);
-  oscillator.start();
-  oscillator.stop(audioContext.currentTime + 0.2);
-}
-
-function applyTheme(theme) {
-  document.body.dataset.theme = theme;
-  themeSelect.value = theme;
-  localStorage.setItem("chitMafiaTheme", theme);
-}
-
-function updateQr(code) {
-  if (!code) {
-    qrImage.removeAttribute("src");
-    return;
-  }
-  qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(roomUrl(code))}`;
-}
-
-function renderChit(role) {
-  const details = ROLE_DETAILS[role];
-  chitCard.classList.add("revealed");
-  chitCard.style.setProperty("--role-color", details.color);
-  roleIcon.textContent = details.icon;
-  roleName.textContent = role;
-  roleHint.textContent = details.hint;
-  revealChit.disabled = true;
-  revealChit.textContent = "Chit Revealed";
-}
-
-function renderHiddenChit() {
-  chitCard.classList.remove("revealed");
-  chitCard.style.removeProperty("--role-color");
-  roleIcon.textContent = "?";
-  roleName.textContent = "Hidden";
-  roleHint.textContent = "Reveal only when nobody else can see your screen.";
-  revealChit.disabled = false;
-  revealChit.textContent = "Reveal My Chit";
-}
-
-function chatConfigFor(room, me) {
-  const roomLocked = Boolean(room.started && me && !me.alive && room.phase !== "ended");
-  const spectatorLocked = room.isSpectator;
-  const channels = [
-    {
-      id: "room",
-      label: "Room",
-      inputLabel: "Room message",
-      placeholder: spectatorLocked ? "Spectators are read-only" : roomLocked ? "Eliminated players use Dead Chat" : "Type to the room",
-      messages: room.messages || [],
-      canSend: !roomLocked && !spectatorLocked && !room.myMuted,
-      note: spectatorLocked
-        ? "Spectators can watch but cannot chat or vote."
-        : room.myMuted
-          ? "The host muted your chat."
-          : roomLocked
-        ? "You can read the room chat, but eliminated players only send messages in Dead Chat."
-        : "Everyone in the room can see this chat.",
-    },
-  ];
-
-  if (room.canUseMafiaChat || room.mafiaMessages?.length) {
-    channels.push({
-      id: "mafia",
-      label: "Mafia",
-      inputLabel: "Mafia message",
-      placeholder: room.canUseMafiaChat ? "Plan with Mafia" : "Mafia chat opens at night",
-      messages: room.mafiaMessages || [],
-      canSend: room.canUseMafiaChat,
-      note: "Only revealed Mafia can see this chat.",
-    });
+function migratePost(post, userId) {
+  const isSample = post.sample || sampleSignatures.has(`${post.title}|${post.author}`);
+  if (isSample) {
+    return {
+      ...post,
+      sample: true,
+      mine: false
+    };
   }
 
-  if (room.canUseDeadChat || room.deadMessages?.length) {
-    channels.push({
-      id: "dead",
-      label: "Dead",
-      inputLabel: "Dead chat message",
-      placeholder: room.canUseDeadChat ? "Talk with eliminated players" : "Dead chat is closed",
-      messages: room.deadMessages || [],
-      canSend: room.canUseDeadChat,
-      note: "Only eliminated players can see Dead Chat during the game.",
-    });
-  }
-
-  if (!channels.some((channel) => channel.id === activeChatChannel)) {
-    activeChatChannel = room.canUseDeadChat ? "dead" : "room";
-  }
-
-  return channels;
-}
-
-function renderChatPanel(room, me) {
-  const channels = chatConfigFor(room, me);
-  const activeConfig = channels.find((channel) => channel.id === activeChatChannel) || channels[0];
-  const messages = activeConfig.messages;
-  const shouldStickToBottom =
-    chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 60;
-  const newestMessage = messages.at(-1)?.id || "";
-
-  chatTabs.querySelectorAll(".chat-tab").forEach((tab) => {
-    const channel = channels.find((item) => item.id === tab.dataset.channel);
-    tab.classList.toggle("hidden", !channel);
-    tab.classList.toggle("active", activeConfig.id === tab.dataset.channel);
-    tab.disabled = !channel;
-    if (channel) tab.textContent = channel.label;
-  });
-
-  chatCount.textContent = `${messages.length} ${messages.length === 1 ? "message" : "messages"}`;
-  chatInputLabel.textContent = activeConfig.inputLabel;
-  chatInput.placeholder = activeConfig.placeholder;
-  chatInput.disabled = !activeConfig.canSend;
-  chatForm.querySelector("button").disabled = !activeConfig.canSend;
-  chatNote.textContent = activeConfig.note;
-  chatMessages.innerHTML = "";
-
-  if (messages.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "empty-chat";
-    empty.textContent = `No ${activeConfig.label.toLowerCase()} messages yet.`;
-    chatMessages.append(empty);
-    lastMessageIds[activeConfig.id] = "";
-    return;
-  }
-
-  messages.forEach((message) => {
-    const item = document.createElement("article");
-    item.className = `chat-message ${activeConfig.id}${message.isMe ? " mine" : ""}`;
-
-    const meta = document.createElement("div");
-    meta.className = "chat-meta";
-
-    const name = document.createElement("strong");
-    name.textContent = message.isMe ? `${message.name} (you)` : message.name;
-
-    const time = document.createElement("span");
-    time.textContent = new Date(message.createdAt).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const text = document.createElement("p");
-    text.textContent = message.text;
-
-    meta.append(name, time);
-    item.append(meta, text);
-    chatMessages.append(item);
-  });
-
-  if (shouldStickToBottom || newestMessage !== lastMessageIds[activeConfig.id]) {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-  if (newestMessage && lastMessageIds[activeConfig.id] && newestMessage !== lastMessageIds[activeConfig.id]) {
-    playTone("message");
-  }
-  lastMessageIds[activeConfig.id] = newestMessage;
-}
-
-function phaseName(phase) {
   return {
-    lobby: "Lobby",
-    night: "Night",
-    day: "Day",
-    vote: "Voting",
-    ended: "Game Over",
-  }[phase] || "Room";
+    ...post,
+    mine: typeof post.mine === "undefined" ? true : post.mine,
+    ownerId: post.ownerId || userId
+  };
 }
 
-function formatSeconds(totalSeconds) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${minutes}:${seconds}`;
+function initials(nameOrEmail) {
+  const source = nameOrEmail || "ID";
+  const parts = source.replace(/@.*/, "").split(/[.\s_-]+/).filter(Boolean);
+  const first = parts[0] || "ID";
+  const second = parts[1] || "";
+  return (first.charAt(0) || "I").toUpperCase() + (second.charAt(0) || first.charAt(1) || "D").toUpperCase();
 }
 
-function updateTimerDisplay() {
-  if (!lastRoom?.phaseEndsAt) {
-    timerCountdown.textContent = "--";
-    timerCountdown.classList.remove("expired");
-    timerProgress.style.width = "0%";
-    return;
+function normalizeGmailId(value) {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  if (trimmed.includes("@")) return trimmed;
+  return `${trimmed.replace(/\s+/g, "")}@gmail.com`;
+}
+
+function currentAuthor(profile = state.profile) {
+  return profile.name || profile.email || "You";
+}
+
+function isMine(post) {
+  return post.mine === true || post.ownerId === state.userId || (state.profile.email && post.ownerEmail === state.profile.email);
+}
+
+function claimMinePosts() {
+  const author = currentAuthor();
+  state.posts = state.posts.map((post) => {
+    if (!isMine(post)) return post;
+    return {
+      ...post,
+      mine: true,
+      ownerId: state.userId,
+      ownerEmail: state.profile.email,
+      author
+    };
+  });
+}
+
+function applyTheme() {
+  document.documentElement.classList.toggle("dark", state.theme === "dark");
+  qs("#themeToggle").innerHTML = state.theme === "dark" ? '<i data-lucide="moon"></i>' : '<i data-lucide="sun"></i>';
+  refreshIcons();
+}
+
+function refreshIcons() {
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function showToast(message) {
+  const toast = qs("#toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+}
+
+function setAppStatus(message, tone, hideDelay) {
+  const status = qs("#appStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.remove("ready", "error", "hide");
+  if (tone) status.classList.add(tone);
+  if (hideDelay) {
+    setTimeout(() => status.classList.add("hide"), hideDelay);
   }
-  const remainingMs = lastRoom.phaseEndsAt - (Date.now() + serverClockOffset);
-  if (remainingMs <= 0) {
-    timerCountdown.textContent = "Time up";
-    timerCountdown.classList.add("expired");
-    timerProgress.style.width = "0%";
-    return;
-  }
-  const secondsLeft = Math.ceil(remainingMs / 1000);
-  timerCountdown.textContent = formatSeconds(secondsLeft);
-  timerCountdown.classList.remove("expired");
-  const durationMs = Math.max(1, (lastRoom.phaseDurationSeconds || secondsLeft) * 1000);
-  const percent = Math.max(0, Math.min(100, (remainingMs / durationMs) * 100));
-  timerProgress.style.width = `${percent}%`;
-  const warningKey = `${lastRoom.code}:${lastRoom.phase}:${lastRoom.round}`;
-  if (secondsLeft <= 10 && warningKey !== lastWarningKey) {
-    lastWarningKey = warningKey;
-    playTone("warning");
-  }
 }
 
-function startTimer() {
-  if (timerId) window.clearInterval(timerId);
-  updateTimerDisplay();
-  timerId = window.setInterval(updateTimerDisplay, 500);
+function myPosts() {
+  return state.posts.filter(isMine);
 }
 
-function renderGameLog(entries = []) {
-  gameLog.innerHTML = "";
-  if (entries.length === 0) {
+function topStyleFor(posts) {
+  const counts = {};
+  let best = "";
+  let bestCount = 0;
+  posts.forEach((post) => {
+    const category = post.category || "Unstyled";
+    counts[category] = (counts[category] || 0) + 1;
+    if (counts[category] > bestCount) {
+      best = category;
+      bestCount = counts[category];
+    }
+  });
+  return best || "Not set";
+}
+
+function renderMyShots() {
+  const grid = qs("#myShotsGrid");
+  if (!grid) return;
+  const posts = myPosts().sort((a, b) => b.createdAt - a.createdAt);
+  grid.innerHTML = "";
+
+  if (!posts.length) {
     const empty = document.createElement("p");
-    empty.className = "empty-chat";
-    empty.textContent = "No game events yet.";
-    gameLog.append(empty);
+    empty.className = "panel";
+    empty.textContent = "No shared shots yet.";
+    grid.append(empty);
     return;
   }
 
-  entries.slice(-12).reverse().forEach((entry) => {
-    const item = document.createElement("article");
-    item.className = "log-entry";
-
-    const time = document.createElement("span");
-    time.textContent = new Date(entry.createdAt).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const text = document.createElement("p");
-    text.textContent = entry.text;
-
-    item.append(time, text);
-    gameLog.append(item);
-  });
-}
-
-function renderGameHistory(history = []) {
-  gameHistory.innerHTML = "";
-  if (history.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "empty-chat";
-    empty.textContent = "No finished games yet.";
-    gameHistory.append(empty);
-    return;
-  }
-  history.forEach((game) => {
-    const item = document.createElement("article");
-    item.className = "log-entry";
-    const title = document.createElement("span");
-    title.textContent = `${game.winner} win - round ${game.round}`;
-    const text = document.createElement("p");
-    text.textContent = game.players.map((player) => `${player.name}: ${player.role}`).join(", ");
-    item.append(title, text);
-    gameHistory.append(item);
-  });
-}
-
-function renderVoteResults(results) {
-  voteResultsPanel.classList.toggle("hidden", !results);
-  if (!results) return;
-
-  voteResultsRound.textContent = `Round ${results.round}`;
-  voteResultsList.innerHTML = "";
-  const summary = document.createElement("p");
-  summary.className = "action-text";
-  summary.textContent = results.eliminatedName
-    ? `${results.eliminatedName} was voted out.`
-    : results.tied
-      ? "The vote tied. Nobody was eliminated."
-      : "Nobody was eliminated.";
-  voteResultsList.append(summary);
-
-  results.rows.forEach((row) => {
-    const item = document.createElement("div");
-    item.className = "result-row";
-    item.textContent = `${row.voterName} voted for ${row.targetName}`;
-    voteResultsList.append(item);
-  });
-}
-
-function renderHostSettings(room, isHost) {
-  hostSettings.classList.toggle("hidden", !isHost || room.started);
-  if (!isHost || room.started) return;
-  passwordState.textContent = room.settings.hasPassword ? "Password on" : "No password";
-  settingsMaxPlayers.value = room.maxPlayers;
-  settingsMafia.value = room.roles.mafia;
-  settingsDetective.value = room.roles.detective;
-  settingsDoctor.value = room.roles.doctor;
-  settingsNightSeconds.value = room.settings.nightSeconds;
-  settingsVoteSeconds.value = room.settings.voteSeconds;
-  settingsMaxRounds.value = room.settings.maxRounds;
-  settingsAutoResolve.checked = room.settings.autoResolve;
-}
-
-function renderActionStatus(room) {
-  if (!room.actionStatus?.length) return;
-  addActionText(
-    room.actionStatus
-      .map((status) => `${status.label}: ${status.done ? "done" : "waiting"}`)
-      .join(" | "),
-  );
-}
-
-function renderEndScreen(room) {
-  endScreen.classList.toggle("hidden", room.phase !== "ended");
-  if (room.phase !== "ended") return;
-
-  winnerTitle.textContent = `${room.winner} Win`;
-  endRoles.innerHTML = "";
-  room.players.forEach((player) => {
-    const item = document.createElement("article");
-    item.className = `role-reveal ${player.alive ? "alive" : "dead"}`;
-
-    const name = document.createElement("strong");
-    name.textContent = player.isMe ? `${player.name} (you)` : player.name;
-
-    const role = document.createElement("span");
-    role.textContent = player.role || "Unknown";
-
-    const status = document.createElement("small");
-    status.textContent = player.alive ? "Survived" : "Eliminated";
-
-    item.append(name, role, status);
-    endRoles.append(item);
-  });
-}
-
-function createPlayerSelect(players, filterPlayer, selectedId = "") {
-  const select = document.createElement("select");
-  select.name = "targetId";
-  select.required = true;
-
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "Choose a player";
-  select.append(placeholder);
-
-  players.filter(filterPlayer).forEach((player) => {
-    const option = document.createElement("option");
-    option.value = player.id;
-    option.textContent = player.isMe ? `${player.name} (you)` : player.name;
-    option.selected = player.id === selectedId;
-    select.append(option);
-  });
-
-  return select;
-}
-
-function addActionText(text) {
-  const paragraph = document.createElement("p");
-  paragraph.className = "action-text";
-  paragraph.textContent = text;
-  actionBody.append(paragraph);
-}
-
-function renderActionForm({ buttonText, endpoint, players, filterPlayer, selectedId, extraText }) {
-  if (extraText) addActionText(extraText);
-
-  const form = document.createElement("form");
-  form.className = "action-form";
-  const select = createPlayerSelect(players, filterPlayer, selectedId);
-  const button = document.createElement("button");
-  button.type = "submit";
-  button.className = "primary-button";
-  button.textContent = buttonText;
-
-  form.append(select, button);
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-      const room = await requestJson(`/api/rooms/${session.code}/${endpoint}`, {
-        method: "POST",
-        body: JSON.stringify({
-          token: session.token,
-          targetId: select.value,
-        }),
-      });
-      renderRoom(room);
-    } catch (error) {
-      instructionBand.textContent = error.message;
-    }
-  });
-  actionBody.append(form);
-}
-
-function renderActionPanel(room, me) {
-  actionBody.innerHTML = "";
-  actionPanel.classList.toggle("hidden", !room.started || !me);
-  if (!room.started || !me) return;
-
-  const phase = room.phase || "night";
-  actionTitle.textContent = phase === "ended" ? "Game Over" : `${phaseName(phase)} Action`;
-  phaseLabel.textContent = phase === "ended" ? room.winner || "Finished" : `Round ${room.round || 1}`;
-  renderActionStatus(room);
-
-  if (phase === "ended") {
-    addActionText(`${room.winner} win. The host can reset chits to play again.`);
-    return;
-  }
-
-  if (!me.alive) {
-    addActionText("You have been eliminated. You can watch the game and use Dead Chat, but you cannot act or vote.");
-    return;
-  }
-
-  if (!room.myRole) {
-    addActionText("Reveal your chit before taking game actions.");
-    return;
-  }
-
-  if (phase === "night") {
-    if (room.myRole === "Mafia") {
-      const team = room.mafiaTeam.length > 1 ? ` Your Mafia team: ${room.mafiaTeam.join(", ")}.` : "";
-      renderActionForm({
-        buttonText: room.myNightAction?.mafiaSubmitted ? "Change Target" : "Choose Target",
-        endpoint: "night-action",
-        players: room.players,
-        filterPlayer: (player) => player.alive && !room.mafiaTeam.includes(player.name),
-        extraText: `Pick one non-Mafia player to attack.${team}`,
-      });
-      return;
-    }
-
-    if (room.myRole === "Detective") {
-      const result = room.myNightAction?.detectiveResult;
-      renderActionForm({
-        buttonText: result ? "Check Someone Else" : "Check Player",
-        endpoint: "night-action",
-        players: room.players,
-        filterPlayer: (player) => player.alive && !player.isMe,
-        extraText: result
-          ? `${result.targetName} is ${result.alignment}.`
-          : "Choose one living player to secretly investigate.",
-      });
-      return;
-    }
-
-    if (room.myRole === "Doctor") {
-      renderActionForm({
-        buttonText: room.myNightAction?.doctorSubmitted ? "Change Protection" : "Protect Player",
-        endpoint: "night-action",
-        players: room.players,
-        filterPlayer: (player) => player.alive,
-        extraText: "Choose one living player to protect tonight. You may protect yourself.",
-      });
-      return;
-    }
-
-    addActionText("You are sleeping this night. Watch for the host to resolve night actions.");
-    return;
-  }
-
-  if (phase === "day") {
-    addActionText("Discuss in chat. Share suspicions, defend yourself, and ask the host to start voting when ready.");
-    return;
-  }
-
-  if (phase === "vote") {
-    renderActionForm({
-      buttonText: room.myVoteTargetId ? "Change Vote" : "Vote",
-      endpoint: "vote",
-      players: room.players,
-      filterPlayer: (player) => player.alive && !player.isMe,
-      selectedId: room.myVoteTargetId,
-      extraText: "Vote for one living player to eliminate.",
-    });
-  }
-}
-
-function renderRoom(room) {
-  lastRoom = room;
-  serverClockOffset = (room.serverNow || Date.now()) - Date.now();
-  startTimer();
-
-  const me = room.players.find((player) => player.isMe);
-  const isHost = me?.isHost;
-  const phase = room.phase || (room.started ? "night" : "lobby");
-  gamePanel.dataset.phase = phase;
-  document.body.dataset.phase = phase;
-  const phaseKey = `${room.code}:${phase}:${room.round}:${room.winner || ""}`;
-  if (lastPhaseKey && phaseKey !== lastPhaseKey) {
-    playTone("phase");
-  }
-  lastPhaseKey = phaseKey;
-
-  roomKicker.textContent = phaseName(phase);
-  roomTitle.textContent = phase === "lobby"
-    ? "Waiting Room"
-    : phase === "ended"
-      ? "Game Over"
-      : `Round ${room.round || 1}`;
-  roomCode.textContent = room.code;
-  joinedCount.textContent = `${room.players.length}/${room.maxPlayers}`;
-  seenCount.textContent = room.players.filter((player) => player.seen).length;
-  spectatorCount.textContent = room.spectators.length;
-  inviteLink.value = roomUrl(room.code);
-  updateQr(room.code);
-  reconnectCodeDisplay.textContent = room.myReconnectCode || "--------";
-  hostActions.classList.toggle("hidden", !me || (room.started && !isHost));
-  readyButton.classList.toggle("hidden", room.started || !me);
-  readyButton.textContent = me?.ready ? "Ready ✓" : "Ready";
-  readyButton.disabled = room.started || !me;
-  myChitPanel.classList.toggle("hidden", !room.started || !me);
-  startGame.classList.toggle("hidden", room.started || !isHost);
-  resolveNight.classList.toggle("hidden", !isHost || phase !== "night");
-  startVote.classList.toggle("hidden", !isHost || phase !== "day");
-  resolveVote.classList.toggle("hidden", !isHost || phase !== "vote");
-  extendTimer.classList.toggle("hidden", !isHost || !room.started || phase === "lobby" || phase === "ended");
-  resetGame.classList.toggle("hidden", !isHost);
-  startGame.disabled = room.started || !room.players.every((player) => player.ready);
-  resolveNight.disabled = !room.started || phase !== "night";
-  startVote.disabled = !room.started || phase !== "day";
-  resolveVote.disabled = !room.started || phase !== "vote";
-  extendTimer.disabled = !room.started || phase === "lobby" || phase === "ended";
-  resetGame.disabled = !room.started;
-  renderHostSettings(room, isHost);
-
-  if (phase === "ended") {
-    instructionBand.textContent = `${room.winner} win. The host can reset chits to play again.`;
-  } else if (phase === "night") {
-    instructionBand.textContent = "Night phase: role players choose privately before the timer ends, then the host resolves night and starts voting.";
-  } else if (phase === "day") {
-    instructionBand.textContent = "Day phase: discuss in chat, then the host starts voting.";
-  } else if (phase === "vote") {
-    instructionBand.textContent = "Voting phase: discuss quickly, vote before the timer ends, then the host resolves voting.";
-  } else {
-    instructionBand.textContent = isHost
-      ? "Share the invite link, then start when everyone is in."
-      : "You are in the room. Wait for the host to start and pass the chits.";
-  }
-
-  if (me) {
-    myName.textContent = `${me.name}'s chit`;
-  }
-
-  if (room.myRole) {
-    renderChit(room.myRole);
-  } else {
-    renderHiddenChit();
-  }
-
-  renderChatPanel(room, me);
-  renderGameLog(room.gameLog);
-  renderGameHistory(room.history);
-  renderVoteResults(room.voteResults);
-  renderEndScreen(room);
-  renderActionPanel(room, me);
-
-  playerCards.innerHTML = "";
-  room.players.forEach((player, index) => {
+  posts.slice(0, 8).forEach((post) => {
     const card = document.createElement("article");
-    card.className = `player-card${player.seen ? " seen" : ""}${player.alive ? "" : " dead"}`;
+    card.className = "mini-shot";
 
-    const topLine = document.createElement("div");
-    topLine.className = "player-topline";
+    const image = document.createElement("img");
+    image.src = post.image;
+    image.alt = post.title;
 
-    const number = document.createElement("span");
-    number.className = "player-number";
-    number.textContent = index + 1;
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = post.title;
+    const details = document.createElement("span");
+    details.textContent = `${post.location} - ${post.camera}`;
 
-    const badge = document.createElement("span");
-    badge.className = "seen-badge";
-    badge.textContent = room.started
-      ? player.alive ? (player.seen ? "Seen" : "Hidden") : "Out"
-      : player.ready ? "Ready" : "Not ready";
-
-    const identity = document.createElement("div");
-    identity.className = "player-identity";
-
-    const avatar = document.createElement("span");
-    avatar.className = "player-avatar";
-    avatar.textContent = player.name.trim().slice(0, 1).toUpperCase() || "?";
-
-    const name = document.createElement("div");
-    name.className = "player-name";
-    name.textContent = player.isMe ? `${player.name} (you)` : player.name;
-    identity.append(avatar, name);
-
-    topLine.append(number, badge);
-    card.append(topLine, identity);
-    if (player.muted) {
-      const muted = document.createElement("span");
-      muted.className = "player-role";
-      muted.textContent = "Muted";
-      card.append(muted);
-    }
-    if (phase === "ended" && player.role) {
-      const role = document.createElement("span");
-      role.className = "player-role";
-      role.textContent = player.role;
-      card.append(role);
-    }
-    if (isHost && !player.isHost) {
-      const controls = document.createElement("div");
-      controls.className = "player-controls";
-
-      const muteButton = document.createElement("button");
-      muteButton.type = "button";
-      muteButton.className = "ghost-button small-button";
-      muteButton.textContent = player.muted ? "Unmute" : "Mute";
-      muteButton.addEventListener("click", () => runHostCommand("mute", {
-        targetId: player.id,
-        muted: !player.muted,
-      }));
-      controls.append(muteButton);
-
-      if (!room.started) {
-        const kickButton = document.createElement("button");
-        kickButton.type = "button";
-        kickButton.className = "ghost-button small-button";
-        kickButton.textContent = "Kick";
-        kickButton.addEventListener("click", () => runHostCommand("kick", { targetId: player.id }));
-        controls.append(kickButton);
-      }
-      card.append(controls);
-    }
-    playerCards.append(card);
+    body.append(title, details);
+    card.append(image, body);
+    grid.append(card);
   });
 }
 
-async function refreshRoom() {
-  if (!session) return;
+function updateProfileUI() {
+  const profile = state.profile;
+  const signedIn = Boolean(profile.email);
+  const mine = myPosts();
+  const label = signedIn ? profile.name || profile.email : "Sign in";
+  const avatar = initials(profile.name || profile.email);
+
+  qs("#topName").textContent = label;
+  qs("#topAvatar").textContent = avatar;
+  qs("#profileAvatar").textContent = avatar;
+  qs("#profileName").textContent = signedIn ? profile.name || "Photographer" : "Your photographer profile";
+  qs("#profileEmail").textContent = signedIn ? profile.email : "Sign in with your Gmail ID to personalize this prototype.";
+  qs("#profileCamera").textContent = profile.camera || "Not set";
+  qs("#profileLocation").textContent = profile.location || "Not set";
+  qs("#profileShots").textContent = mine.length;
+  qs("#profileTopStyle").textContent = topStyleFor(mine);
+  qs("#profileStatus").textContent = signedIn ? "Profile saved." : "";
+  qs("#profileStatus").classList.toggle("ready", signedIn);
+
+  qs("#nameField").value = profile.name;
+  qs("#emailField").value = profile.email;
+  qs("#favCameraField").value = profile.camera;
+  qs("#homeLocationField").value = profile.location;
+  renderMyShots();
+}
+
+function filteredPosts() {
+  const search = qs("#searchInput").value.trim().toLowerCase();
+  const style = qs("#styleFilter").value;
+  const posts = state.posts.filter((post) => {
+    const matchesStyle = style === "all" || post.category === style;
+    const matchesView = activeView === "all" || isMine(post);
+    const haystack = [post.title, post.location, post.camera, post.lens, post.iso, post.aperture, post.shutter, post.author, post.story]
+      .join(" ")
+      .toLowerCase();
+    return matchesView && matchesStyle && (!search || haystack.includes(search));
+  });
+
+  return posts.sort((a, b) => {
+    if (activeSort === "popular") return b.likes - a.likes;
+    if (activeSort === "nearby") return a.location.localeCompare(b.location);
+    return b.createdAt - a.createdAt;
+  });
+}
+
+function renderPosts() {
+  const posts = filteredPosts();
+  feedGrid.innerHTML = "";
+
+  if (!posts.length) {
+    feedGrid.innerHTML = '<p class="panel">No shots match those filters yet.</p>';
+  }
+
+  posts.forEach((post) => {
+    const node = template.content.firstElementChild.cloneNode(true);
+    node.querySelector(".photo").src = post.image;
+    node.querySelector(".photo").alt = post.title;
+    node.querySelector(".tag").textContent = isMine(post) ? `Yours - ${post.category}` : post.category;
+    node.querySelector("h3").textContent = post.title;
+    node.querySelector(".location").textContent = post.location;
+    node.querySelector(".story").textContent = post.story || "Shared as a quick settings note.";
+    node.querySelector(".camera").textContent = post.camera;
+    node.querySelector(".lens").textContent = post.lens;
+    node.querySelector(".iso").textContent = post.iso;
+    node.querySelector(".aperture").textContent = post.aperture;
+    node.querySelector(".shutter").textContent = post.shutter;
+    node.querySelector(".author").textContent = post.author;
+
+    const likeButton = node.querySelector(".like-button");
+    likeButton.classList.toggle("active", state.liked.includes(post.id));
+    likeButton.title = `${post.likes} likes`;
+    likeButton.addEventListener("click", () => {
+      const liked = state.liked.includes(post.id);
+      state.liked = liked ? state.liked.filter((id) => id !== post.id) : [...state.liked, post.id];
+      post.likes += liked ? -1 : 1;
+      saveState();
+      renderPosts();
+    });
+
+    feedGrid.append(node);
+  });
+
+  qs("#shotCount").textContent = state.posts.length;
+  qs("#placeCount").textContent = new Set(state.posts.map((post) => post.location)).size;
+  refreshIcons();
+}
+
+function openProfileDialog() {
+  authDialog.hidden = false;
+  authDialog.setAttribute("aria-hidden", "false");
+  qs("#nameField").focus();
+}
+
+function closeProfileDialog() {
+  authDialog.hidden = true;
+  authDialog.setAttribute("aria-hidden", "true");
+}
+
+function saveProfileFromForm() {
+  state.profile = {
+    name: qs("#nameField").value.trim(),
+    email: normalizeGmailId(qs("#emailField").value),
+    camera: qs("#favCameraField").value.trim(),
+    location: qs("#homeLocationField").value.trim()
+  };
+  claimMinePosts();
+  const persisted = saveState();
+  updateProfileUI();
+  renderPosts();
+  showToast(persisted ? "Profile saved." : "Profile saved for this session.");
+  closeProfileDialog();
+}
+
+function bindEvents() {
+  qs("#openAuth").addEventListener("click", openProfileDialog);
+  qs("#editProfile").addEventListener("click", openProfileDialog);
+  qs("#closeAuth").addEventListener("click", closeProfileDialog);
+  authDialog.addEventListener("click", (event) => {
+    if (event.target === authDialog) closeProfileDialog();
+  });
+  qs("#themeToggle").addEventListener("click", () => {
+    state.theme = state.theme === "dark" ? "light" : "dark";
+    saveState();
+    applyTheme();
+  });
+
+  qs("#googleDemo").addEventListener("click", () => {
+    if (!qs("#nameField").value.trim()) qs("#nameField").value = "LensLog Photographer";
+    if (!qs("#emailField").value.trim()) qs("#emailField").value = "photographer@gmail.com";
+    if (!qs("#favCameraField").value.trim()) qs("#favCameraField").value = "Fujifilm X-T5";
+    if (!qs("#homeLocationField").value.trim()) qs("#homeLocationField").value = "Mumbai, India";
+    saveProfileFromForm();
+  });
+
+  qs("#authForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveProfileFromForm();
+  });
+
+  qs("#searchInput").addEventListener("input", renderPosts);
+  qs("#styleFilter").addEventListener("change", renderPosts);
+  qs("#resetFilters").addEventListener("click", () => {
+    qs("#searchInput").value = "";
+    qs("#styleFilter").value = "all";
+    activeView = "all";
+    document.querySelectorAll("[data-view]").forEach((item) => item.classList.toggle("active", item.dataset.view === "all"));
+    renderPosts();
+  });
+
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll("[data-view]").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      activeView = button.dataset.view;
+      renderPosts();
+    });
+  });
+
+  document.querySelectorAll("[data-sort]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll("[data-sort]").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      activeSort = button.dataset.sort;
+      renderPosts();
+    });
+  });
+
+  document.querySelectorAll("[data-jump]").forEach((button) => {
+    button.addEventListener("click", () => document.querySelector(button.dataset.jump).scrollIntoView({ behavior: "smooth" }));
+  });
+
+  qs("#photoUpload").addEventListener("change", (event) => {
+    const [file] = event.target.files;
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      uploadedImage = reader.result;
+      qs("#uploadPreview").src = uploadedImage;
+      qs("#uploadPreview").style.display = "block";
+      qs(".upload-box").classList.add("has-image");
+      qs(".upload-empty").style.display = "none";
+      qs("#uploadStatus").textContent = `${file.name} added. Add the settings, then press Publish to LensLog.`;
+      qs("#uploadStatus").classList.add("ready");
+      showToast("Picture added.");
+    };
+    reader.onerror = () => {
+      uploadedImage = "";
+      qs("#uploadStatus").textContent = "That picture could not be read. Try another file.";
+      qs("#uploadStatus").classList.remove("ready");
+      showToast("Picture could not be added.");
+    };
+    reader.readAsDataURL(file);
+  });
+
+  qs("#shareForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!uploadedImage) {
+      qs("#uploadStatus").textContent = "Add a picture before publishing.";
+      qs("#uploadStatus").classList.remove("ready");
+      qs("#photoUpload").focus();
+      showToast("Add a picture before publishing.");
+      return;
+    }
+    const author = currentAuthor();
+    const post = {
+      id: uid(),
+      mine: true,
+      ownerId: state.userId,
+      ownerEmail: state.profile.email,
+      title: qs("#titleInput").value.trim(),
+      location: qs("#locationInput").value.trim(),
+      camera: qs("#cameraInput").value.trim(),
+      lens: qs("#lensInput").value.trim(),
+      iso: qs("#isoInput").value.trim(),
+      aperture: qs("#apertureInput").value.trim(),
+      shutter: qs("#shutterInput").value.trim(),
+      category: qs("#categoryInput").value,
+      story: qs("#storyInput").value.trim(),
+      author,
+      image: uploadedImage,
+      likes: 0,
+      createdAt: Date.now()
+    };
+    state.posts = [post, ...state.posts];
+    const persisted = saveState();
+    event.target.reset();
+    uploadedImage = "";
+    qs("#uploadPreview").removeAttribute("src");
+    qs("#uploadPreview").style.display = "none";
+    qs(".upload-box").classList.remove("has-image");
+    qs(".upload-empty").style.display = "grid";
+    qs("#uploadStatus").textContent = "No photo added yet.";
+    qs("#uploadStatus").classList.remove("ready");
+    qs("#searchInput").value = "";
+    qs("#styleFilter").value = "all";
+    activeSort = "recent";
+    activeView = "all";
+    document.querySelectorAll("[data-sort]").forEach((item) => item.classList.toggle("active", item.dataset.sort === "recent"));
+    document.querySelectorAll("[data-view]").forEach((item) => item.classList.toggle("active", item.dataset.view === "all"));
+    updateProfileUI();
+    renderPosts();
+    showToast(persisted ? "Photo published to the Feed and your profile." : "Photo published for this session.");
+    qs("#feed").scrollIntoView({ behavior: "smooth" });
+  });
+
+  window.addEventListener("hashchange", updateActiveNav);
+  window.addEventListener("scroll", updateActiveNav, { passive: true });
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  if (location.protocol !== "http:" && location.protocol !== "https:") return;
+  navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+}
+
+function updateActiveNav() {
+  const sections = ["feed", "share", "profile"];
+  const current = [...sections].reverse().find((id) => document.getElementById(id).getBoundingClientRect().top <= 120) || "feed";
+  document.querySelectorAll(".nav-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.getAttribute("href") === `#${current}`);
+  });
+}
+
+function startApp() {
   try {
-    const room = await requestJson(`/api/rooms/${session.code}?token=${encodeURIComponent(session.token)}`);
-    showGameShell();
-    renderRoom(room);
+    applyTheme();
+    bindEvents();
+    updateProfileUI();
+    renderPosts();
+    updateActiveNav();
+    registerServiceWorker();
+    setAppStatus("LensLog ready.", "ready", 1800);
   } catch (error) {
-    clearSession();
-    showHome(error.message);
+    setAppStatus("LensLog could not start. Refresh the page.", "error");
+    console.error(error);
   }
 }
 
-function startPolling() {
-  if (pollId) window.clearInterval(pollId);
-  pollId = window.setInterval(refreshRoom, 2000);
-}
-
-createForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  normalizeCreateValues();
-
-  try {
-    const room = await requestJson("/api/rooms", {
-      method: "POST",
-      body: JSON.stringify({
-        hostName: hostNameInput.value.trim() || "Host",
-        maxPlayers: Number(playerCountInput.value),
-        password: createPasswordInput.value,
-        roles: {
-          mafia: Number(mafiaCountInput.value),
-          detective: Number(detectiveCountInput.value),
-          doctor: Number(doctorCountInput.value),
-        },
-        settings: {
-          nightSeconds: Number(nightSecondsInput.value),
-          voteSeconds: Number(voteSecondsInput.value),
-          maxRounds: Number(maxRoundsInput.value),
-          autoResolve: autoResolveInput.checked,
-        },
-      }),
-    });
-    saveSession({ code: room.code, token: room.token });
-    window.history.replaceState({}, "", roomUrl(room.code));
-    await refreshRoom();
-    startPolling();
-  } catch (error) {
-    errorMessage.textContent = error.message;
-  }
-});
-
-joinForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  try {
-    const code = joinCodeInput.value.trim().toUpperCase();
-    const room = await requestJson(`/api/rooms/${code}/join`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: joinNameInput.value.trim() || "Player",
-        reconnectCode: reconnectCodeInput.value.trim(),
-        password: joinPasswordInput.value,
-      }),
-    });
-    saveSession({ code: room.code, token: room.token });
-    reconnectCodeInput.value = "";
-    window.history.replaceState({}, "", roomUrl(room.code));
-    await refreshRoom();
-    startPolling();
-  } catch (error) {
-    errorMessage.textContent = error.message;
-  }
-});
-
-spectateRoom.addEventListener("click", async () => {
-  try {
-    const code = joinCodeInput.value.trim().toUpperCase();
-    const room = await requestJson(`/api/rooms/${code}/spectate`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: joinNameInput.value.trim() || "Spectator",
-        password: joinPasswordInput.value,
-      }),
-    });
-    saveSession({ code: room.code, token: room.token, spectator: true });
-    window.history.replaceState({}, "", roomUrl(room.code));
-    await refreshRoom();
-    startPolling();
-  } catch (error) {
-    errorMessage.textContent = error.message;
-  }
-});
-
-startGame.addEventListener("click", async () => {
-  try {
-    await requestJson(`/api/rooms/${session.code}/start`, {
-      method: "POST",
-      body: JSON.stringify({ token: session.token }),
-    });
-    await refreshRoom();
-  } catch (error) {
-    instructionBand.textContent = error.message;
-  }
-});
-
-readyButton.addEventListener("click", () => {
-  const me = lastRoom?.players.find((player) => player.isMe);
-  runHostCommand("ready", { ready: !me?.ready });
-});
-
-saveSettings.addEventListener("click", async () => {
-  normalizeSettingsValues();
-  try {
-    await requestJson(`/api/rooms/${session.code}/settings`, {
-      method: "POST",
-      body: JSON.stringify({
-        token: session.token,
-        maxPlayers: Number(settingsMaxPlayers.value),
-        roles: {
-          mafia: Number(settingsMafia.value),
-          detective: Number(settingsDetective.value),
-          doctor: Number(settingsDoctor.value),
-        },
-        settings: {
-          nightSeconds: Number(settingsNightSeconds.value),
-          voteSeconds: Number(settingsVoteSeconds.value),
-          maxRounds: Number(settingsMaxRounds.value),
-          autoResolve: settingsAutoResolve.checked,
-        },
-        password: settingsPassword.value,
-      }),
-    });
-    settingsPassword.value = "";
-    await refreshRoom();
-  } catch (error) {
-    instructionBand.textContent = error.message;
-  }
-});
-
-async function runHostCommand(endpoint, extraBody = {}) {
-  try {
-    await requestJson(`/api/rooms/${session.code}/${endpoint}`, {
-      method: "POST",
-      body: JSON.stringify({ token: session.token, ...extraBody }),
-    });
-    await refreshRoom();
-  } catch (error) {
-    instructionBand.textContent = error.message;
-  }
-}
-
-resolveNight.addEventListener("click", () => runHostCommand("resolve-night"));
-startVote.addEventListener("click", () => runHostCommand("start-vote"));
-resolveVote.addEventListener("click", () => runHostCommand("resolve-vote"));
-extendTimer.addEventListener("click", () => runHostCommand("extend-timer"));
-
-resetGame.addEventListener("click", async () => {
-  try {
-    await requestJson(`/api/rooms/${session.code}/reset`, {
-      method: "POST",
-      body: JSON.stringify({ token: session.token }),
-    });
-    await refreshRoom();
-  } catch (error) {
-    instructionBand.textContent = error.message;
-  }
-});
-
-revealChit.addEventListener("click", async () => {
-  try {
-    const result = await requestJson(`/api/rooms/${session.code}/reveal`, {
-      method: "POST",
-      body: JSON.stringify({ token: session.token }),
-    });
-    renderChit(result.role);
-    await refreshRoom();
-  } catch (error) {
-    instructionBand.textContent = error.message;
-  }
-});
-
-chatForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const message = chatInput.value.trim();
-  if (!message || !session) return;
-
-  chatInput.value = "";
-  try {
-    const room = await requestJson(`/api/rooms/${session.code}/messages`, {
-      method: "POST",
-      body: JSON.stringify({
-        token: session.token,
-        message,
-        channel: activeChatChannel,
-      }),
-    });
-    renderRoom(room);
-  } catch (error) {
-    instructionBand.textContent = error.message;
-    chatInput.value = message;
-  }
-});
-
-chatTabs.addEventListener("click", (event) => {
-  const tab = event.target.closest(".chat-tab");
-  if (!tab || tab.disabled) return;
-  activeChatChannel = tab.dataset.channel;
-  if (lastRoom) {
-    const me = lastRoom.players.find((player) => player.isMe);
-    renderChatPanel(lastRoom, me);
-  }
-});
-
-copyInvite.addEventListener("click", async () => {
-  inviteLink.select();
-  await navigator.clipboard.writeText(inviteLink.value);
-  copyInvite.textContent = "Copied";
-  window.setTimeout(() => {
-    copyInvite.textContent = "Copy";
-  }, 1200);
-});
-
-openRoleGuide.addEventListener("click", () => {
-  roleGuideDialog.showModal();
-});
-
-closeRoleGuide.addEventListener("click", () => {
-  roleGuideDialog.close();
-});
-
-themeSelect.addEventListener("change", () => {
-  applyTheme(themeSelect.value);
-});
-
-soundToggle.addEventListener("change", () => {
-  localStorage.setItem("chitMafiaSound", soundToggle.checked ? "on" : "off");
-  if (soundToggle.checked) playTone("phase");
-});
-
-privateNotes.addEventListener("input", () => {
-  if (notesKey()) {
-    localStorage.setItem(notesKey(), privateNotes.value);
-  }
-});
-
-leaveRoom.addEventListener("click", () => {
-  clearSession();
-  window.history.replaceState({}, "", window.location.pathname);
-  showHome();
-});
-
-[playerCountInput, mafiaCountInput, detectiveCountInput, doctorCountInput].forEach((input) => {
-  input.addEventListener("input", normalizeCreateValues);
-});
-
-[nightSecondsInput, voteSecondsInput, maxRoundsInput].forEach((input) => {
-  input.addEventListener("input", normalizeCreateValues);
-});
-
-[
-  settingsMaxPlayers,
-  settingsMafia,
-  settingsDetective,
-  settingsDoctor,
-  settingsNightSeconds,
-  settingsVoteSeconds,
-  settingsMaxRounds,
-].forEach((input) => {
-  input.addEventListener("input", normalizeSettingsValues);
-});
-
-const inviteCode = new URLSearchParams(window.location.search).get("room");
-if (inviteCode) {
-  const normalizedCode = inviteCode.toUpperCase();
-  joinCodeInput.value = normalizedCode;
-  session = savedSessionFor(normalizedCode);
-} else {
-  session = JSON.parse(localStorage.getItem("chitMafiaSession") || "null");
-}
-
-normalizeCreateValues();
-applyTheme(localStorage.getItem("chitMafiaTheme") || "classic");
-soundToggle.checked = localStorage.getItem("chitMafiaSound") === "on";
-if (session) {
-  loadPrivateNotes();
-  refreshRoom();
-  startPolling();
-}
+document.addEventListener("DOMContentLoaded", startApp);

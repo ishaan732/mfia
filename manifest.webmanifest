@@ -1,0 +1,19 @@
+{
+  "name": "LensLog",
+  "short_name": "LensLog",
+  "description": "A free photographer community for sharing photos, locations, and camera settings.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f3ee",
+  "theme_color": "#0f766e",
+  "categories": ["photo", "social", "productivity"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

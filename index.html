@@ -3,396 +3,309 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chit Mafia Online</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <meta name="description" content="LensLog is a free photographer community for sharing photos, locations, camera settings, lenses, ISO, aperture, and shutter speed." />
+    <meta name="robots" content="index,follow" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta property="og:title" content="LensLog - Photo Settings Community" />
+    <meta property="og:description" content="Share the shot, the place, and the camera settings behind it." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>LensLog - Free Photo Settings Community</title>
+    <link rel="preconnect" href="https://images.unsplash.com" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css?v=12" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "LensLog",
+        "applicationCategory": "PhotographyApplication",
+        "operatingSystem": "Any",
+        "description": "A free photographer community for sharing photos, locations, and camera settings.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="./app.js?v=12" defer></script>
   </head>
   <body>
-    <main class="app-shell">
-      <section class="setup-panel" id="homePanel">
-        <div class="brand-row">
-          <span class="mark">CM</span>
-          <div>
-            <p class="eyebrow">Online hidden-role rooms</p>
-            <h1>Chit Mafia</h1>
+    <noscript>
+      <div class="app-status error">LensLog needs JavaScript enabled to save profiles, upload photos, and publish posts.</div>
+    </noscript>
+    <div class="app-status" id="appStatus" role="status" aria-live="polite">Loading LensLog...</div>
+    <header class="topbar">
+      <a class="brand" href="#feed" aria-label="LensLog home">
+        <span class="brand-mark">LL</span>
+        <span>LensLog</span>
+      </a>
+      <nav class="nav-tabs" aria-label="Primary">
+        <a class="nav-tab active" href="#feed">Feed</a>
+        <a class="nav-tab" href="#share">Share</a>
+        <a class="nav-tab" href="#profile">Profile</a>
+      </nav>
+      <div class="top-actions">
+        <button class="icon-button" id="themeToggle" type="button" aria-label="Toggle theme" title="Toggle theme">
+          <i data-lucide="sun"></i>
+        </button>
+        <button class="profile-chip" id="openAuth" type="button">
+          <span class="avatar" id="topAvatar">ID</span>
+          <span id="topName">Sign in</span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="app-shell" id="feed">
+        <aside class="sidebar" aria-label="Filters">
+          <div class="panel">
+            <div class="panel-title">
+              <i data-lucide="search"></i>
+              <span>Discover shots</span>
+            </div>
+            <label class="field">
+              <span>Search</span>
+              <input id="searchInput" type="search" placeholder="Camera, city, lens..." />
+            </label>
+            <label class="field">
+              <span>Style</span>
+              <select id="styleFilter">
+                <option value="all">All styles</option>
+                <option value="Street">Street</option>
+                <option value="Landscape">Landscape</option>
+                <option value="Portrait">Portrait</option>
+                <option value="Wildlife">Wildlife</option>
+              </select>
+            </label>
+            <div class="metric-grid">
+              <div>
+                <strong id="shotCount">0</strong>
+                <span>Shots</span>
+              </div>
+              <div>
+                <strong id="placeCount">0</strong>
+                <span>Places</span>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="online-grid">
-          <form id="createForm" class="setup-form">
-            <div class="section-title">
-              <h2>Create Room</h2>
+          <div class="panel compact">
+            <div class="panel-title">
+              <i data-lucide="sparkles"></i>
+              <span>Friendly promise</span>
             </div>
-
-            <label class="field">
-              <span>Your Name</span>
-              <input id="hostName" type="text" maxlength="24" value="Host" autocomplete="name" />
-            </label>
-
-            <label class="field">
-              <span>Max Players</span>
-              <input id="playerCount" type="number" min="1" max="10" value="6" />
-            </label>
-
-            <label class="field">
-              <span>Room Password</span>
-              <input id="createPassword" type="password" maxlength="32" placeholder="Optional" autocomplete="new-password" />
-            </label>
-
-            <div class="role-grid" aria-label="Role counts">
-              <label class="field">
-                <span>Mafia</span>
-                <input id="mafiaCount" type="number" min="0" max="10" value="1" />
-              </label>
-              <label class="field">
-                <span>Detective</span>
-                <input id="detectiveCount" type="number" min="0" max="1" value="1" />
-              </label>
-              <label class="field">
-                <span>Doctor</span>
-                <input id="doctorCount" type="number" min="0" max="1" value="1" />
-              </label>
-            </div>
-
-            <div class="role-grid" aria-label="Game settings">
-              <label class="field">
-                <span>Night Timer</span>
-                <input id="nightSeconds" type="number" min="10" max="300" value="45" />
-              </label>
-              <label class="field">
-                <span>Vote Timer</span>
-                <input id="voteSeconds" type="number" min="10" max="300" value="60" />
-              </label>
-              <label class="field">
-                <span>Max Rounds</span>
-                <input id="maxRounds" type="number" min="0" max="20" value="0" />
-              </label>
-            </div>
-
-            <label class="check-row">
-              <input id="autoResolve" type="checkbox" checked />
-              <span>Auto resolve when timers end</span>
-            </label>
-
-            <button type="submit" class="primary-button">Create Online Room</button>
-          </form>
-
-          <form id="joinForm" class="setup-form">
-            <div class="section-title">
-              <h2>Join Room</h2>
-            </div>
-
-            <label class="field">
-              <span>Your Name</span>
-              <input id="joinName" type="text" maxlength="24" value="Player" autocomplete="name" />
-            </label>
-
-            <label class="field">
-              <span>Room Code</span>
-              <input id="joinCode" type="text" maxlength="6" placeholder="AB12CD" autocomplete="off" />
-            </label>
-
-            <label class="field">
-              <span>Reconnect Code</span>
-              <input id="reconnectCode" type="text" inputmode="numeric" maxlength="8" placeholder="Optional" autocomplete="off" />
-            </label>
-
-            <label class="field">
-              <span>Room Password</span>
-              <input id="joinPassword" type="password" maxlength="32" placeholder="If needed" autocomplete="current-password" />
-            </label>
-
-            <div class="split-actions">
-              <button type="submit" class="secondary-button">Join With Code</button>
-              <button type="button" class="ghost-button" id="spectateRoom">Spectate</button>
-            </div>
-          </form>
-        </div>
-
-        <section class="info-panel">
-          <div class="section-title">
-            <h2>How To Play</h2>
+            <p>Free photo sharing, simple settings, and profiles built for photographers who want to learn from each other.</p>
           </div>
-          <ol class="how-list">
-            <li>Create a room and share the invite link.</li>
-            <li>Everyone joins with their own name on their own device.</li>
-            <li>The host starts the game and chits are secretly assigned.</li>
-            <li>Night actions, discussion, voting, and eliminations happen in the app.</li>
-            <li>Civilians win by voting out all Mafia. Mafia wins when they control the vote.</li>
-          </ol>
+        </aside>
+
+        <section class="content">
+          <div class="hero-strip" aria-label="Community highlights">
+            <div>
+              <p class="eyebrow">Open photo notebook</p>
+              <h1>Share the shot, the place, and the settings behind it.</h1>
+            </div>
+            <button class="primary-button" data-jump="#share" type="button">
+              <i data-lucide="camera"></i>
+              Share a photo
+            </button>
+          </div>
+
+          <div class="toolbar">
+            <div class="segmented" role="group" aria-label="View posts">
+              <button class="segment active" data-view="all" type="button">All</button>
+              <button class="segment" data-view="mine" type="button">My shots</button>
+            </div>
+            <div class="segmented" role="group" aria-label="Sort posts">
+              <button class="segment active" data-sort="recent" type="button">Recent</button>
+              <button class="segment" data-sort="popular" type="button">Popular</button>
+              <button class="segment" data-sort="nearby" type="button">Nearby</button>
+            </div>
+            <button class="ghost-button" id="resetFilters" type="button">
+              <i data-lucide="rotate-ccw"></i>
+              Reset
+            </button>
+          </div>
+
+          <div class="feed-grid" id="feedGrid" aria-live="polite"></div>
         </section>
-
-        <p class="error-message" id="errorMessage" role="alert"></p>
       </section>
 
-      <section class="game-panel hidden" id="gamePanel">
-        <div class="game-header">
-          <div>
-            <p class="eyebrow" id="roomKicker">Room</p>
-            <h1 id="roomTitle">Lobby</h1>
-          </div>
-          <button type="button" class="ghost-button" id="leaveRoom">Leave</button>
+      <section class="share-band" id="share">
+        <div class="section-heading">
+          <p class="eyebrow">Log a frame</p>
+          <h2>Post a photo with camera settings in under a minute.</h2>
         </div>
-
-        <div class="share-band">
-          <label class="field">
-            <span>Invite Link</span>
-            <input id="inviteLink" type="text" readonly />
-          </label>
-          <button type="button" class="ghost-button" id="copyInvite">Copy</button>
-        </div>
-
-        <div class="status-strip">
-          <div>
-            <span id="joinedCount">0</span>
-            <small>joined</small>
-          </div>
-          <div>
-            <span id="seenCount">0</span>
-            <small>seen</small>
-          </div>
-          <div>
-            <span id="roomCode">----</span>
-            <small>room code</small>
-          </div>
-          <div>
-            <span id="timerCountdown">--</span>
-            <small>timer</small>
-          </div>
-          <div>
-            <span id="spectatorCount">0</span>
-            <small>spectators</small>
-          </div>
-        </div>
-
-        <div class="timer-track" aria-hidden="true">
-          <span id="timerProgress"></span>
-        </div>
-
-        <div class="private-band">
-          <span>Private reconnect code</span>
-          <strong id="reconnectCodeDisplay">--------</strong>
-          <small>Use this with your name if you refresh, switch devices, or get disconnected.</small>
-        </div>
-
-        <div class="instruction-band" id="instructionBand">
-          Waiting for players. The host starts once everyone has joined.
-        </div>
-
-        <div class="host-actions hidden" id="hostActions">
-          <button type="button" class="secondary-button" id="readyButton">Ready</button>
-          <button type="button" class="primary-button" id="startGame">Start And Pass Chits</button>
-          <button type="button" class="primary-button hidden" id="resolveNight">Resolve Night + Start Vote</button>
-          <button type="button" class="primary-button hidden" id="startVote">Start Vote</button>
-          <button type="button" class="primary-button hidden" id="resolveVote">Resolve Vote</button>
-          <button type="button" class="ghost-button hidden" id="extendTimer">Add 30s</button>
-          <button type="button" class="ghost-button" id="resetGame">Reset Chits</button>
-        </div>
-
-        <section class="settings-panel hidden" id="hostSettings">
-          <div class="section-title">
-            <h2>Host Settings</h2>
-            <span class="chat-count" id="passwordState">No password</span>
-          </div>
-          <div class="settings-grid">
-            <label class="field">
-              <span>Max Players</span>
-              <input id="settingsMaxPlayers" type="number" min="1" max="10" />
-            </label>
-            <label class="field">
-              <span>Mafia</span>
-              <input id="settingsMafia" type="number" min="0" max="10" />
-            </label>
-            <label class="field">
-              <span>Detective</span>
-              <input id="settingsDetective" type="number" min="0" max="1" />
-            </label>
-            <label class="field">
-              <span>Doctor</span>
-              <input id="settingsDoctor" type="number" min="0" max="1" />
-            </label>
-            <label class="field">
-              <span>Night Timer</span>
-              <input id="settingsNightSeconds" type="number" min="10" max="300" />
-            </label>
-            <label class="field">
-              <span>Vote Timer</span>
-              <input id="settingsVoteSeconds" type="number" min="10" max="300" />
-            </label>
-            <label class="field">
-              <span>Max Rounds</span>
-              <input id="settingsMaxRounds" type="number" min="0" max="20" />
-            </label>
-            <label class="field">
-              <span>Room Password</span>
-              <input id="settingsPassword" type="password" maxlength="32" placeholder="Blank clears" autocomplete="new-password" />
-            </label>
-          </div>
-          <label class="check-row">
-            <input id="settingsAutoResolve" type="checkbox" />
-            <span>Auto resolve timers</span>
-          </label>
-          <button type="button" class="primary-button" id="saveSettings">Save Settings</button>
-        </section>
-
-        <section class="end-screen hidden" id="endScreen">
-          <div>
-            <p class="eyebrow">Game Over</p>
-            <h2 id="winnerTitle">Winner</h2>
-          </div>
-          <div id="endRoles" class="role-reveal-grid"></div>
-        </section>
-
-        <section class="results-panel hidden" id="voteResultsPanel">
-          <div class="section-title">
-            <h2>Vote Results</h2>
-            <span class="chat-count" id="voteResultsRound">Round</span>
-          </div>
-          <div id="voteResultsList" class="results-list"></div>
-        </section>
-
-        <div class="game-layout">
-          <div class="game-main">
-            <div id="playerCards" class="player-cards"></div>
-
-            <div class="room-tools">
-              <section class="my-chit-panel hidden" id="myChitPanel">
-                <p class="eyebrow" id="myName">Your chit</p>
-                <div class="chit-card" id="chitCard">
-                  <span class="role-icon" id="roleIcon">?</span>
-                  <h2 id="roleName">Hidden</h2>
-                  <p id="roleHint">Reveal only when nobody else can see your screen.</p>
-                </div>
-                <button type="button" class="primary-button" id="revealChit">Reveal My Chit</button>
-              </section>
-
-              <section class="action-panel hidden" id="actionPanel">
-                <div class="section-title">
-                  <h2 id="actionTitle">Game Action</h2>
-                  <span class="chat-count" id="phaseLabel">Round 1</span>
-                </div>
-                <div id="actionBody" class="action-body"></div>
-              </section>
+        <form class="share-form" id="shareForm">
+          <div class="form-media">
+            <div class="upload-box">
+              <img id="uploadPreview" alt="" />
+              <span class="upload-badge" id="uploadBadge">Photo ready</span>
+              <label class="upload-empty" for="photoUpload">
+                <i data-lucide="image-plus"></i>
+                Add photo
+              </label>
             </div>
-
-            <section class="chat-panel">
-              <div class="section-title">
-                <h2>Chat Mode</h2>
-                <span class="chat-count" id="chatCount">0 messages</span>
-              </div>
-              <div class="chat-tabs" id="chatTabs">
-                <button type="button" class="chat-tab active" data-channel="room">Room</button>
-                <button type="button" class="chat-tab hidden" data-channel="mafia">Mafia</button>
-                <button type="button" class="chat-tab hidden" data-channel="dead">Dead</button>
-              </div>
-              <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
-              <form id="chatForm" class="chat-form">
-                <label class="field">
-                  <span id="chatInputLabel">Message</span>
-                  <input id="chatInput" type="text" maxlength="160" placeholder="Type to the room" autocomplete="off" />
-                </label>
-                <button type="submit" class="primary-button">Send</button>
-              </form>
-              <p class="chat-note" id="chatNote"></p>
-            </section>
+            <input class="photo-input" id="photoUpload" type="file" accept="image/*" required />
+            <p class="upload-status" id="uploadStatus" aria-live="polite">No photo added yet.</p>
           </div>
+          <div class="form-grid">
+            <label class="field">
+              <span>Title</span>
+              <input id="titleInput" required placeholder="Morning light on Marine Drive" />
+            </label>
+            <label class="field">
+              <span>Location</span>
+              <input id="locationInput" required placeholder="Mumbai, India" />
+            </label>
+            <label class="field">
+              <span>Camera</span>
+              <input id="cameraInput" required placeholder="Sony A7 IV" />
+            </label>
+            <label class="field">
+              <span>Lens</span>
+              <input id="lensInput" required placeholder="35mm f/1.8" />
+            </label>
+            <label class="field">
+              <span>ISO</span>
+              <input id="isoInput" required type="number" min="25" placeholder="400" />
+            </label>
+            <label class="field">
+              <span>Aperture</span>
+              <input id="apertureInput" required placeholder="f/2.8" />
+            </label>
+            <label class="field">
+              <span>Shutter</span>
+              <input id="shutterInput" required placeholder="1/250s" />
+            </label>
+            <label class="field">
+              <span>Style</span>
+              <select id="categoryInput">
+                <option>Street</option>
+                <option>Landscape</option>
+                <option>Portrait</option>
+                <option>Wildlife</option>
+              </select>
+            </label>
+            <label class="field full">
+              <span>Story</span>
+              <textarea id="storyInput" rows="4" placeholder="What made this frame work?"></textarea>
+            </label>
+            <button class="primary-button full" type="submit">
+              <i data-lucide="send"></i>
+              Publish to LensLog
+            </button>
+          </div>
+        </form>
+      </section>
 
-          <aside class="side-guide">
-            <section class="info-panel">
-              <div class="section-title">
-                <h2>Tools</h2>
-              </div>
-              <div class="tool-grid">
-                <button type="button" class="ghost-button" id="openRoleGuide">Role Guide</button>
-                <label class="field">
-                  <span>Theme</span>
-                  <select id="themeSelect">
-                    <option value="classic">Classic Paper</option>
-                    <option value="dark">Dark Mode</option>
-                    <option value="red">Red / Black</option>
-                  </select>
-                </label>
-                <label class="check-row">
-                  <input id="soundToggle" type="checkbox" />
-                  <span>Sound effects</span>
-                </label>
-              </div>
-            </section>
-
-            <section class="info-panel">
-              <div class="section-title">
-                <h2>Share QR</h2>
-              </div>
-              <img id="qrImage" class="qr-image" alt="Room invite QR code" />
-            </section>
-
-            <section class="info-panel">
-              <div class="section-title">
-                <h2>Private Notes</h2>
-              </div>
-              <textarea id="privateNotes" class="notes-box" maxlength="1000" placeholder="Your private notes stay on this device."></textarea>
-            </section>
-
-            <section class="info-panel">
-              <div class="section-title">
-                <h2>How To Play</h2>
-              </div>
-              <ol class="how-list">
-                <li>Reveal your chit privately.</li>
-                <li>Mafia secretly attacks at night.</li>
-                <li>Detective checks one player at night.</li>
-                <li>Doctor protects one player at night.</li>
-                <li>Discuss quickly once voting starts.</li>
-                <li>Alive players vote someone out.</li>
-              </ol>
-            </section>
-
-            <section class="info-panel">
-              <div class="section-title">
-                <h2>Round Flow</h2>
-              </div>
-              <ol class="how-list compact-list">
-                <li>Night actions</li>
-                <li>Host resolves night + starts vote</li>
-                <li>Discuss quickly</li>
-                <li>Players vote</li>
-                <li>Host resolves vote</li>
-                <li>Repeat until Mafia or Civilians win</li>
-              </ol>
-            </section>
-
-            <section class="info-panel">
-              <div class="section-title">
-                <h2>Game Log</h2>
-              </div>
-              <div id="gameLog" class="game-log"></div>
-            </section>
-
-            <section class="info-panel">
-              <div class="section-title">
-                <h2>Game History</h2>
-              </div>
-              <div id="gameHistory" class="game-log"></div>
-            </section>
-          </aside>
+      <section class="profile-band" id="profile">
+        <div class="profile-layout">
+          <div class="profile-card">
+            <span class="avatar large" id="profileAvatar">ID</span>
+            <h2 id="profileName">Your photographer profile</h2>
+            <p id="profileEmail">Sign in with your Gmail ID to personalize this prototype.</p>
+            <p class="profile-status" id="profileStatus" aria-live="polite"></p>
+            <button class="secondary-button" id="editProfile" type="button">
+              <i data-lucide="user-pen"></i>
+              Edit profile
+            </button>
+          </div>
+          <div class="profile-details">
+            <div>
+              <span>Favorite camera</span>
+              <strong id="profileCamera">Not set</strong>
+            </div>
+            <div>
+              <span>Home location</span>
+              <strong id="profileLocation">Not set</strong>
+            </div>
+            <div>
+              <span>Shared shots</span>
+              <strong id="profileShots">0</strong>
+            </div>
+            <div>
+              <span>Top style</span>
+              <strong id="profileTopStyle">Not set</strong>
+            </div>
+          </div>
+          <section class="profile-gallery">
+            <div class="section-heading compact-heading">
+              <p class="eyebrow">Your work</p>
+              <h2>My shared shots</h2>
+            </div>
+            <div class="mini-shot-grid" id="myShotsGrid" aria-live="polite"></div>
+          </section>
         </div>
       </section>
     </main>
 
-    <dialog id="roleGuideDialog" class="guide-dialog">
-      <div class="dialog-content">
-        <div class="section-title">
-          <h2>Role Guide</h2>
-          <button type="button" class="ghost-button" id="closeRoleGuide">Close</button>
-        </div>
-        <div class="role-guide-list">
-          <article><strong>Mafia</strong><p>Choose one non-Mafia player to attack at night. Win when Mafia control the vote.</p></article>
-          <article><strong>Detective</strong><p>Check one player at night to learn if they are Mafia or not Mafia.</p></article>
-          <article><strong>Doctor</strong><p>Protect one player at night. If Mafia attack that player, nobody dies.</p></article>
-          <article><strong>Civilian</strong><p>Use chat, voting, and deduction to remove all Mafia.</p></article>
-        </div>
-      </div>
-    </dialog>
+    <div class="auth-dialog" id="authDialog" hidden>
+      <form class="auth-card" id="authForm">
+        <button class="icon-button dialog-close" type="button" id="closeAuth" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+        <p class="eyebrow">Account</p>
+        <h2>Make LensLog yours</h2>
+        <button class="google-button" id="googleDemo" type="button">
+          <span class="google-mark">G</span>
+          Continue with Gmail
+        </button>
+        <label class="field">
+          <span>Name</span>
+          <input id="nameField" required placeholder="Ishaan Dusi" />
+        </label>
+        <label class="field">
+          <span>Gmail ID</span>
+          <input id="emailField" required type="text" inputmode="email" autocomplete="email" placeholder="you or you@gmail.com" />
+        </label>
+        <label class="field">
+          <span>Favorite camera</span>
+          <input id="favCameraField" placeholder="Fujifilm X-T5" />
+        </label>
+        <label class="field">
+          <span>Home location</span>
+          <input id="homeLocationField" placeholder="Delhi, India" />
+        </label>
+        <button class="primary-button" type="submit">
+          <i data-lucide="check"></i>
+          Save profile
+        </button>
+      </form>
+    </div>
 
-    <script src="./app.js"></script>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <template id="postTemplate">
+      <article class="photo-card">
+        <div class="photo-wrap">
+          <img class="photo" alt="" />
+          <span class="tag"></span>
+        </div>
+        <div class="card-body">
+          <div class="card-title-row">
+            <div>
+              <h3></h3>
+              <p class="location"></p>
+            </div>
+            <button class="icon-button like-button" type="button" aria-label="Like photo">
+              <i data-lucide="heart"></i>
+            </button>
+          </div>
+          <p class="story"></p>
+          <dl class="settings-grid">
+            <div><dt>Camera</dt><dd class="camera"></dd></div>
+            <div><dt>Lens</dt><dd class="lens"></dd></div>
+            <div><dt>ISO</dt><dd class="iso"></dd></div>
+            <div><dt>Aperture</dt><dd class="aperture"></dd></div>
+            <div><dt>Shutter</dt><dd class="shutter"></dd></div>
+            <div><dt>By</dt><dd class="author"></dd></div>
+          </dl>
+        </div>
+      </article>
+    </template>
   </body>
 </html>

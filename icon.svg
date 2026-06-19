@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="LensLog icon">
+  <rect width="128" height="128" rx="28" fill="#0f766e"/>
+  <circle cx="64" cy="64" r="38" fill="#f5f3ee"/>
+  <circle cx="64" cy="64" r="24" fill="#17201c"/>
+  <circle cx="75" cy="53" r="7" fill="#46b5a9"/>
+  <path d="M28 36h22l8-10h24l8 10h10a10 10 0 0 1 10 10v46a10 10 0 0 1-10 10H28a10 10 0 0 1-10-10V46a10 10 0 0 1 10-10Z" fill="none" stroke="#f5f3ee" stroke-width="7" stroke-linejoin="round"/>
+</svg>

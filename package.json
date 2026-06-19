@@ -1,7 +1,8 @@
 {
-  "name": "chit-mafia-online",
+  "name": "lenslog",
   "version": "1.0.0",
   "private": true,
+  "description": "A free photographer community for sharing photos, locations, and camera settings.",
   "scripts": {
     "start": "node server.js"
   },
