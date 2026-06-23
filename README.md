@@ -10,6 +10,12 @@ npm start
 
 Open `http://localhost:3000`.
 
+Run backend checks:
+
+```sh
+npm test
+```
+
 ## Deploy On Render
 
 This repo is ready to replace the existing Render web service.
@@ -20,7 +26,11 @@ Render settings:
 - Build command: `npm install`
 - Start command: `npm start`
 - Health check path: `/api/health`
-- Instance type: Free is fine for the prototype
+- Instance type: Free is fine for testing; use paid always-on hosting before a serious public push.
+- Environment variables:
+  - `DATA_DIR`: set this to a persistent disk mount path before public launch.
+  - `ADMIN_TOKEN`: set a long private token so reported or bad posts can be hidden/removed through admin endpoints.
+  - `AUTO_HIDE_REPORT_COUNT`: optional number of unique reports before a post is hidden automatically. Default: `5`.
 
 If the existing Render service is connected to this GitHub repo, commit and push these files. Render should redeploy automatically.
 
@@ -36,7 +46,13 @@ LensLog now has backend endpoints for real shared submissions:
 
 - `GET /api/posts` returns the shared feed.
 - `POST /api/posts` publishes a photo and settings.
+- `POST /api/reports` marks a public photo for review.
+- `GET /api/admin/posts` lists all posts when `ADMIN_TOKEN` is provided.
+- `PATCH /api/admin/posts/:id` hides/unhides a post when `ADMIN_TOKEN` is provided.
+- `DELETE /api/admin/posts/:id` removes a post when `ADMIN_TOKEN` is provided.
 - Uploaded images are saved under the server data directory and served from `/uploads/...`.
+- Server writes are serialized so simultaneous submissions do not overwrite each other.
+- Uploaded image bytes are checked as real PNG, JPG, or WebP files.
 
 For a public Instagram launch, configure persistent storage before collecting real submissions. Render Free files are not permanent across restarts/redeploys. Use one of these before launch:
 
@@ -50,9 +66,10 @@ Included:
 
 - SEO tags and structured data
 - `robots.txt`
+- `sitemap.xml`
+- Privacy and terms pages
 - PWA manifest
 - SVG app icon
 - service worker for HTTP/HTTPS deployments
-- Firebase Hosting config if you later deploy with Google Firebase
 
 Real Google Sign-In needs a Google OAuth client ID. The current account flow is a Gmail-ready local profile that can be upgraded to real OAuth.

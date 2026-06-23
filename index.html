@@ -9,12 +9,15 @@
     <meta property="og:title" content="LensLog - Photo Settings Community" />
     <meta property="og:description" content="Share the shot, the place, and the camera settings behind it." />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://lenslog.onrender.com/" />
+    <meta property="og:image" content="https://lenslog.onrender.com/icon.svg" />
     <meta name="twitter:card" content="summary_large_image" />
     <title>LensLog - Free Photo Settings Community</title>
+    <link rel="canonical" href="https://lenslog.onrender.com/" />
     <link rel="preconnect" href="https://images.unsplash.com" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -31,7 +34,7 @@
       }
     </script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="./app.js?v=14" defer></script>
+    <script src="./app.js?v=15" defer></script>
   </head>
   <body>
     <noscript>
@@ -160,19 +163,19 @@
           <div class="form-grid">
             <label class="field">
               <span>Title</span>
-              <input id="titleInput" required placeholder="Morning light on Marine Drive" />
+              <input id="titleInput" required maxlength="80" placeholder="Morning light on Marine Drive" />
             </label>
             <label class="field">
               <span>Location</span>
-              <input id="locationInput" required placeholder="Mumbai, India" />
+              <input id="locationInput" required maxlength="80" autocomplete="address-level2" placeholder="Mumbai, India" />
             </label>
             <label class="field">
               <span>Camera</span>
-              <input id="cameraInput" required placeholder="Sony A7 IV" />
+              <input id="cameraInput" required maxlength="80" placeholder="Sony A7 IV" />
             </label>
             <label class="field">
               <span>Lens</span>
-              <input id="lensInput" required placeholder="35mm f/1.8" />
+              <input id="lensInput" required maxlength="80" placeholder="35mm f/1.8" />
             </label>
             <label class="field">
               <span>ISO</span>
@@ -180,11 +183,11 @@
             </label>
             <label class="field">
               <span>Aperture</span>
-              <input id="apertureInput" required placeholder="f/2.8" />
+              <input id="apertureInput" required maxlength="20" placeholder="f/2.8" />
             </label>
             <label class="field">
               <span>Shutter</span>
-              <input id="shutterInput" required placeholder="1/250s" />
+              <input id="shutterInput" required maxlength="20" placeholder="1/250s" />
             </label>
             <label class="field">
               <span>Style</span>
@@ -197,7 +200,7 @@
             </label>
             <label class="field full">
               <span>Story</span>
-              <textarea id="storyInput" rows="4" placeholder="What made this frame work?"></textarea>
+              <textarea id="storyInput" rows="4" maxlength="360" placeholder="What made this frame work?"></textarea>
             </label>
             <label class="check-row full">
               <input id="consentInput" type="checkbox" required />
@@ -216,7 +219,7 @@
           <div class="profile-card">
             <span class="avatar large" id="profileAvatar">ID</span>
             <h2 id="profileName">Your photographer profile</h2>
-            <p id="profileEmail">Sign in with your Gmail ID to personalize this prototype.</p>
+            <p id="profileEmail">Sign in with your Gmail ID to save this browser profile.</p>
             <p class="profile-status" id="profileStatus" aria-live="polite"></p>
             <button class="secondary-button" id="editProfile" type="button">
               <i data-lucide="user-pen"></i>
@@ -252,6 +255,15 @@
       </section>
     </main>
 
+    <footer class="site-footer">
+      <strong>LensLog</strong>
+      <nav aria-label="Legal">
+        <a href="./privacy.html">Privacy</a>
+        <a href="./terms.html">Terms</a>
+        <a href="https://github.com/ishaan732/mfia">GitHub</a>
+      </nav>
+    </footer>
+
     <div class="auth-dialog" id="authDialog" hidden>
       <form class="auth-card" id="authForm">
         <button class="icon-button dialog-close" type="button" id="closeAuth" aria-label="Close">
@@ -261,23 +273,23 @@
         <h2>Make LensLog yours</h2>
         <button class="google-button" id="googleDemo" type="button">
           <span class="google-mark">G</span>
-          Continue with Gmail
+          Use Gmail ID
         </button>
         <label class="field">
           <span>Name</span>
-          <input id="nameField" required placeholder="Ishaan Dusi" />
+          <input id="nameField" required maxlength="60" autocomplete="name" placeholder="Ishaan Dusi" />
         </label>
         <label class="field">
           <span>Gmail ID</span>
-          <input id="emailField" required type="text" inputmode="email" autocomplete="email" placeholder="you or you@gmail.com" />
+          <input id="emailField" required maxlength="120" type="text" inputmode="email" autocomplete="email" placeholder="you or you@gmail.com" />
         </label>
         <label class="field">
           <span>Favorite camera</span>
-          <input id="favCameraField" placeholder="Fujifilm X-T5" />
+          <input id="favCameraField" maxlength="80" placeholder="Fujifilm X-T5" />
         </label>
         <label class="field">
           <span>Home location</span>
-          <input id="homeLocationField" placeholder="Delhi, India" />
+          <input id="homeLocationField" maxlength="80" autocomplete="address-level2" placeholder="Delhi, India" />
         </label>
         <button class="primary-button" type="submit">
           <i data-lucide="check"></i>
@@ -300,9 +312,14 @@
               <h3></h3>
               <p class="location"></p>
             </div>
-            <button class="icon-button like-button" type="button" aria-label="Like photo">
-              <i data-lucide="heart"></i>
-            </button>
+            <div class="card-actions">
+              <button class="icon-button like-button" type="button" aria-label="Like photo">
+                <i data-lucide="heart"></i>
+              </button>
+              <button class="icon-button report-button" type="button" aria-label="Report photo">
+                <i data-lucide="flag"></i>
+              </button>
+            </div>
           </div>
           <p class="story"></p>
           <dl class="settings-grid">

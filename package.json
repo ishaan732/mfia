@@ -4,7 +4,8 @@
   "private": true,
   "description": "A free photographer community for sharing photos, locations, and camera settings.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

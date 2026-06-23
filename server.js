@@ -4,16 +4,24 @@ const fsp = require("fs/promises");
 const http = require("http");
 const path = require("path");
 
-const PORT = Number(process.env.PORT) || 3000;
+const configuredPort = Number(process.env.PORT);
+const PORT = Number.isFinite(configuredPort) ? configuredPort : 3000;
 const PUBLIC_DIR = __dirname;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const POSTS_FILE = path.join(DATA_DIR, "posts.json");
+const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
+const AUTO_HIDE_REPORT_COUNT = Number(process.env.AUTO_HIDE_REPORT_COUNT) || 5;
 const MAX_BODY_BYTES = 7 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const RATE_LIMIT_MAX_POSTS = 12;
-const rateLimits = new Map();
+const RATE_LIMIT_MAX_REPORTS = 30;
+const postRateLimits = new Map();
+const reportRateLimits = new Map();
+let postsQueue = Promise.resolve();
+let reportsQueue = Promise.resolve();
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -23,23 +31,53 @@ const MIME_TYPES = {
   ".webmanifest": "application/manifest+json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",
   ".webp": "image/webp"
 };
 
+function securityHeaders(extra = {}) {
+  return {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Content-Security-Policy":
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests",
+    ...extra
+  };
+}
+
 function sendJson(response, status, data) {
-  response.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff"
-  });
+  response.writeHead(
+    status,
+    securityHeaders({
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store"
+    })
+  );
   response.end(JSON.stringify(data));
+}
+
+function sendText(response, status, message) {
+  response.writeHead(
+    status,
+    securityHeaders({
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store"
+    })
+  );
+  response.end(message);
 }
 
 function cleanText(value, maxLength) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function cleanAuthor(value) {
+  const author = cleanText(value, 60);
+  return author && !author.includes("@") ? author : "LensLog Photographer";
 }
 
 function cleanEmail(value) {
@@ -70,31 +108,80 @@ function publicPost(post) {
   };
 }
 
+function adminPost(post) {
+  return {
+    ...publicPost(post),
+    authorEmail: post.authorEmail || "",
+    reports: post.reports || 0,
+    hidden: Boolean(post.hidden),
+    hiddenReason: post.hiddenReason || "",
+    reportedAt: post.reportedAt || null,
+    deletedAt: post.deletedAt || null
+  };
+}
+
+function visiblePosts(posts) {
+  return posts.filter((post) => !post.hidden && !post.deletedAt);
+}
+
 async function ensureDataStore() {
   await fsp.mkdir(UPLOAD_DIR, { recursive: true });
+  await ensureJsonArrayFile(POSTS_FILE);
+  await ensureJsonArrayFile(REPORTS_FILE);
+}
+
+async function ensureJsonArrayFile(filePath) {
   try {
-    await fsp.access(POSTS_FILE);
+    await fsp.access(filePath);
   } catch {
-    await fsp.writeFile(POSTS_FILE, "[]\n");
+    await fsp.writeFile(filePath, "[]\n");
   }
 }
 
-async function readPosts() {
+async function readJsonArray(filePath) {
   await ensureDataStore();
   try {
-    const contents = await fsp.readFile(POSTS_FILE, "utf8");
-    const posts = JSON.parse(contents);
-    return Array.isArray(posts) ? posts : [];
+    const contents = await fsp.readFile(filePath, "utf8");
+    const items = JSON.parse(contents);
+    return Array.isArray(items) ? items : [];
   } catch {
     return [];
   }
 }
 
-async function writePosts(posts) {
+async function writeJsonArray(filePath, items) {
   await ensureDataStore();
-  const tempFile = `${POSTS_FILE}.${process.pid}.tmp`;
-  await fsp.writeFile(tempFile, `${JSON.stringify(posts, null, 2)}\n`);
-  await fsp.rename(tempFile, POSTS_FILE);
+  const tempFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  await fsp.writeFile(tempFile, `${JSON.stringify(items, null, 2)}\n`);
+  await fsp.rename(tempFile, filePath);
+}
+
+async function readPosts() {
+  return readJsonArray(POSTS_FILE);
+}
+
+async function writePosts(posts) {
+  await writeJsonArray(POSTS_FILE, posts);
+}
+
+async function readReports() {
+  return readJsonArray(REPORTS_FILE);
+}
+
+async function writeReports(reports) {
+  await writeJsonArray(REPORTS_FILE, reports);
+}
+
+function withPostsLock(task) {
+  const run = postsQueue.then(task, task);
+  postsQueue = run.catch(() => {});
+  return run;
+}
+
+function withReportsLock(task) {
+  const run = reportsQueue.then(task, task);
+  reportsQueue = run.catch(() => {});
+  return run;
 }
 
 function readBody(request) {
@@ -131,18 +218,44 @@ function clientKey(request) {
   return crypto.createHash("sha256").update(address).digest("hex");
 }
 
-function checkRateLimit(request) {
+function checkRateLimit(store, request, maxRequests) {
   const key = clientKey(request);
   const now = Date.now();
-  const existing = rateLimits.get(key) || [];
+  const existing = store.get(key) || [];
   const recent = existing.filter((time) => now - time < RATE_LIMIT_WINDOW_MS);
-  if (recent.length >= RATE_LIMIT_MAX_POSTS) {
-    rateLimits.set(key, recent);
+  if (recent.length >= maxRequests) {
+    store.set(key, recent);
     return false;
   }
   recent.push(now);
-  rateLimits.set(key, recent);
+  store.set(key, recent);
   return true;
+}
+
+function detectImageExtension(buffer) {
+  if (
+    buffer.length > 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return "png";
+  }
+
+  if (buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "jpg";
+  }
+
+  if (buffer.length > 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") {
+    return "webp";
+  }
+
+  return "";
 }
 
 function decodeImage(imageData) {
@@ -151,17 +264,21 @@ function decodeImage(imageData) {
     throw new Error("Upload a PNG, JPG, or WebP image.");
   }
 
-  const type = match[1].toLowerCase().replace("jpeg", "jpg");
   const buffer = Buffer.from(match[2].replace(/\s/g, ""), "base64");
   if (!buffer.length || buffer.length > MAX_IMAGE_BYTES) {
     throw new Error("Image must be under 4 MB.");
   }
 
-  return { buffer, extension: type === "jpg" ? "jpg" : type };
+  const extension = detectImageExtension(buffer);
+  if (!extension) {
+    throw new Error("That image file could not be verified. Try a JPG, PNG, or WebP.");
+  }
+
+  return { buffer, extension };
 }
 
 async function createPost(request, response) {
-  if (!checkRateLimit(request)) {
+  if (!checkRateLimit(postRateLimits, request, RATE_LIMIT_MAX_POSTS)) {
     sendJson(response, 429, { ok: false, error: "Too many submissions. Please try again later." });
     return;
   }
@@ -182,7 +299,7 @@ async function createPost(request, response) {
     const shutter = cleanText(body.shutter, 20);
     const category = cleanText(body.category, 30) || "Photo";
     const story = cleanText(body.story, 360);
-    const author = cleanText(body.author, 60) || "LensLog Photographer";
+    const author = cleanAuthor(body.author);
     const authorEmail = cleanEmail(body.authorEmail);
     const consent = body.consent === true;
 
@@ -212,42 +329,178 @@ async function createPost(request, response) {
       authorEmail,
       image: `/uploads/${filename}`,
       likes: 0,
+      reports: 0,
+      hidden: false,
       createdAt: Date.now(),
       ipHash: clientKey(request)
     };
 
-    const posts = await readPosts();
-    posts.unshift(post);
-    await writePosts(posts.slice(0, 2000));
+    await withPostsLock(async () => {
+      const posts = await readPosts();
+      posts.unshift(post);
+      await writePosts(posts.slice(0, 2000));
+    });
+
     sendJson(response, 201, { ok: true, post: publicPost(post) });
   } catch (error) {
     sendJson(response, 400, { ok: false, error: error.message || "Could not publish this photo." });
   }
 }
 
+async function reportPost(request, response) {
+  if (!checkRateLimit(reportRateLimits, request, RATE_LIMIT_MAX_REPORTS)) {
+    sendJson(response, 429, { ok: false, error: "Too many reports. Please try again later." });
+    return;
+  }
+
+  try {
+    const body = await readBody(request);
+    if (cleanText(body.website, 120)) {
+      sendJson(response, 400, { ok: false, error: "Report blocked." });
+      return;
+    }
+
+    const postId = cleanText(body.postId, 100);
+    const reason = cleanText(body.reason, 160) || "Needs review";
+    if (!postId) throw new Error("Photo not found.");
+
+    const reporterHash = clientKey(request);
+    let reportCount = 0;
+    let hidden = false;
+    let logged = false;
+
+    await withPostsLock(async () => {
+      const posts = await readPosts();
+      const post = posts.find((item) => item.id === postId && !item.deletedAt);
+      if (!post) throw new Error("Photo not found.");
+
+      const reportHashes = Array.isArray(post.reportHashes) ? post.reportHashes : [];
+      if (!reportHashes.includes(reporterHash)) {
+        post.reportHashes = [...reportHashes, reporterHash].slice(-100);
+        post.reports = (post.reports || 0) + 1;
+        post.reportedAt = Date.now();
+        if (post.reports >= AUTO_HIDE_REPORT_COUNT) {
+          post.hidden = true;
+          post.hiddenReason = "Reported by the community";
+        }
+        await writePosts(posts);
+        logged = true;
+      }
+
+      reportCount = post.reports || 0;
+      hidden = Boolean(post.hidden);
+    });
+
+    if (logged) {
+      await withReportsLock(async () => {
+        const reports = await readReports();
+        reports.unshift({
+          id: makeId(),
+          postId,
+          reason,
+          createdAt: Date.now(),
+          reporterHash
+        });
+        await writeReports(reports.slice(0, 2000));
+      });
+    }
+
+    sendJson(response, 200, { ok: true, reports: reportCount, hidden });
+  } catch (error) {
+    sendJson(response, 400, { ok: false, error: error.message || "Could not report this photo." });
+  }
+}
+
+function getAdminToken(requestUrl, request) {
+  const header = request.headers["x-admin-token"];
+  const authorization = String(request.headers.authorization || "");
+  if (header) return String(header);
+  if (authorization.startsWith("Bearer ")) return authorization.slice(7);
+  return requestUrl.searchParams.get("token") || "";
+}
+
+function requireAdmin(requestUrl, request, response) {
+  if (!ADMIN_TOKEN || getAdminToken(requestUrl, request) !== ADMIN_TOKEN) {
+    sendJson(response, 403, { ok: false, error: "Admin access denied." });
+    return false;
+  }
+  return true;
+}
+
+async function listAdminPosts(requestUrl, request, response) {
+  if (!requireAdmin(requestUrl, request, response)) return;
+  const posts = await readPosts();
+  sendJson(response, 200, { ok: true, posts: posts.map(adminPost) });
+}
+
+async function updateAdminPost(requestUrl, request, response, postId) {
+  if (!requireAdmin(requestUrl, request, response)) return;
+
+  try {
+    const body = request.method === "PATCH" ? await readBody(request) : {};
+    let updatedPost = null;
+    let uploadToRemove = "";
+
+    await withPostsLock(async () => {
+      const posts = await readPosts();
+      const post = posts.find((item) => item.id === postId);
+      if (!post) throw new Error("Photo not found.");
+
+      if (request.method === "DELETE") {
+        post.hidden = true;
+        post.deletedAt = Date.now();
+        post.hiddenReason = "Removed by admin";
+        uploadToRemove = post.image;
+      } else {
+        post.hidden = Boolean(body.hidden);
+        post.hiddenReason = post.hidden ? cleanText(body.hiddenReason, 120) || "Hidden by admin" : "";
+        if (body.deletedAt === null) post.deletedAt = null;
+      }
+
+      updatedPost = adminPost(post);
+      await writePosts(posts);
+    });
+
+    if (uploadToRemove) {
+      const uploadPath = safePath(UPLOAD_DIR, uploadToRemove.replace(/^\/uploads/, ""));
+      if (uploadPath) await fsp.unlink(uploadPath).catch(() => {});
+    }
+
+    sendJson(response, 200, { ok: true, post: updatedPost });
+  } catch (error) {
+    sendJson(response, 400, { ok: false, error: error.message || "Could not update this photo." });
+  }
+}
+
+function isInside(root, target) {
+  const relative = path.relative(root, target);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 function safePath(root, urlPath) {
   const decoded = decodeURIComponent(urlPath);
   const cleanPath = decoded === "/" ? "/index.html" : decoded;
   const resolved = path.resolve(root, `.${cleanPath}`);
-  return resolved.startsWith(root) ? resolved : null;
+  return isInside(root, resolved) ? resolved : null;
 }
 
-function sendFile(response, filePath) {
+function sendFile(request, response, filePath) {
   fs.readFile(filePath, (error, data) => {
     if (error) {
-      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-      response.end("Not found");
+      sendText(response, 404, "Not found");
       return;
     }
 
     const extension = path.extname(filePath);
     const cacheControl = extension === ".html" ? "no-cache" : "public, max-age=3600";
-    response.writeHead(200, {
-      "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
-      "Cache-Control": cacheControl,
-      "X-Content-Type-Options": "nosniff"
-    });
-    response.end(data);
+    response.writeHead(
+      200,
+      securityHeaders({
+        "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
+        "Cache-Control": cacheControl
+      })
+    );
+    response.end(request.method === "HEAD" ? undefined : data);
   });
 }
 
@@ -259,7 +512,8 @@ const server = http.createServer(async (request, response) => {
     sendJson(response, 200, {
       ok: true,
       app: "LensLog",
-      posts: posts.length,
+      posts: visiblePosts(posts).length,
+      storage: DATA_DIR,
       time: new Date().toISOString()
     });
     return;
@@ -267,7 +521,7 @@ const server = http.createServer(async (request, response) => {
 
   if (requestUrl.pathname === "/api/posts" && request.method === "GET") {
     const posts = await readPosts();
-    sendJson(response, 200, { ok: true, posts: posts.map(publicPost) });
+    sendJson(response, 200, { ok: true, posts: visiblePosts(posts).map(publicPost) });
     return;
   }
 
@@ -276,8 +530,24 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (requestUrl.pathname === "/api/reports" && request.method === "POST") {
+    await reportPost(request, response);
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/admin/posts" && request.method === "GET") {
+    await listAdminPosts(requestUrl, request, response);
+    return;
+  }
+
+  const adminPostMatch = /^\/api\/admin\/posts\/([^/]+)$/.exec(requestUrl.pathname);
+  if (adminPostMatch && (request.method === "PATCH" || request.method === "DELETE")) {
+    await updateAdminPost(requestUrl, request, response, adminPostMatch[1]);
+    return;
+  }
+
   if (request.method !== "GET" && request.method !== "HEAD") {
-    response.writeHead(405, { "Allow": "GET, HEAD, POST" });
+    response.writeHead(405, securityHeaders({ Allow: "GET, HEAD, POST, PATCH, DELETE" }));
     response.end();
     return;
   }
@@ -285,28 +555,28 @@ const server = http.createServer(async (request, response) => {
   if (requestUrl.pathname.startsWith("/uploads/")) {
     const uploadPath = safePath(UPLOAD_DIR, requestUrl.pathname.replace(/^\/uploads/, ""));
     if (!uploadPath) {
-      response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-      response.end("Forbidden");
+      sendText(response, 403, "Forbidden");
       return;
     }
-    sendFile(response, uploadPath);
+    sendFile(request, response, uploadPath);
     return;
   }
 
   const filePath = safePath(PUBLIC_DIR, requestUrl.pathname);
   if (!filePath) {
-    response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-    response.end("Forbidden");
+    sendText(response, 403, "Forbidden");
     return;
   }
 
-  sendFile(response, filePath);
+  sendFile(request, response, filePath);
 });
 
 ensureDataStore()
   .then(() => {
     server.listen(PORT, () => {
-      console.log(`LensLog running on http://localhost:${PORT}`);
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : PORT;
+      console.log(`LensLog running on http://localhost:${port}`);
     });
   })
   .catch((error) => {

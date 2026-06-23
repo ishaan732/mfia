@@ -1,5 +1,7 @@
 const STORAGE_KEY = "lenslog-state-v1";
 const USER_ID_KEY = "lenslog-local-user-id";
+const MAX_SOURCE_IMAGE_BYTES = 18 * 1024 * 1024;
+const MAX_UPLOAD_SIDE = 1800;
 const memoryStore = {};
 const uid = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -114,6 +116,7 @@ const defaultState = {
   posts: samplePosts,
   myPostIds: [],
   liked: [],
+  reported: [],
   theme: "light"
 };
 
@@ -146,7 +149,8 @@ function loadState() {
         ...(saved.profile || {})
       },
       myPostIds: saved.myPostIds || [],
-      liked: saved.liked || []
+      liked: saved.liked || [],
+      reported: saved.reported || []
     };
     merged.posts = (saved.posts && saved.posts.length ? saved.posts : samplePosts).map((post) => migratePost(post, merged.userId));
     return merged;
@@ -236,6 +240,92 @@ async function publishSharedPost(post) {
   return { ok: true, post: normalizeApiPost(data.post) };
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("That picture could not be read. Try another file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("That picture could not be prepared. Try a JPG, PNG, WebP, or phone photo."));
+    image.src = url;
+  });
+}
+
+async function prepareUploadImage(file) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Choose an image file.");
+  }
+  if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+    throw new Error("Choose a photo under 18 MB.");
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(objectUrl);
+    const largestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, MAX_UPLOAD_SIDE / largestSide);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("That picture could not be prepared. Try another file.");
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.86);
+  } catch (error) {
+    const dataUrl = await readFileAsDataUrl(file);
+    if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(dataUrl)) throw error;
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function reportSharedPost(post) {
+  if (!canUseApi()) {
+    showToast("Reports work on the live web app.");
+    return;
+  }
+  if (state.reported.includes(post.id)) {
+    showToast("This shot is already marked for review.");
+    return;
+  }
+
+  const response = await fetch("/api/reports", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify({
+      postId: post.id,
+      reason: "Community review",
+      website: ""
+    })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error(data.error || "Could not report this shot.");
+
+  state.reported = [post.id, ...state.reported].slice(0, 500);
+  saveState();
+  showToast(data.hidden ? "Thanks. This shot has been hidden for review." : "Thanks. This shot is marked for review.");
+  if (data.hidden) {
+    state.posts = state.posts.filter((item) => item.id !== post.id);
+    renderPosts();
+    updateProfileUI();
+  } else {
+    renderPosts();
+  }
+}
+
 function migratePost(post, userId) {
   const isSample = post.sample || sampleSignatures.has(`${post.title}|${post.author}`);
   if (isSample) {
@@ -269,7 +359,7 @@ function normalizeGmailId(value) {
 }
 
 function currentAuthor(profile = state.profile) {
-  return profile.name || profile.email || "You";
+  return profile.name || "LensLog Photographer";
 }
 
 function isMine(post) {
@@ -392,7 +482,7 @@ function updateProfileUI() {
   qs("#topAvatar").textContent = avatar;
   qs("#profileAvatar").textContent = avatar;
   qs("#profileName").textContent = signedIn ? profile.name || "Photographer" : "Your photographer profile";
-  qs("#profileEmail").textContent = signedIn ? profile.email : "Sign in with your Gmail ID to personalize this prototype.";
+  qs("#profileEmail").textContent = signedIn ? profile.email : "Sign in with your Gmail ID to save this browser profile.";
   qs("#profileCamera").textContent = profile.camera || "Not set";
   qs("#profileLocation").textContent = profile.location || "Not set";
   qs("#profileShots").textContent = mine.length;
@@ -459,6 +549,22 @@ function renderPosts() {
       post.likes += liked ? -1 : 1;
       saveState();
       renderPosts();
+    });
+
+    const reportButton = node.querySelector(".report-button");
+    const canReport = !post.sample && canUseApi();
+    reportButton.hidden = !canReport;
+    reportButton.classList.toggle("active", state.reported.includes(post.id));
+    reportButton.disabled = state.reported.includes(post.id);
+    reportButton.title = state.reported.includes(post.id) ? "Marked for review" : "Report photo";
+    reportButton.addEventListener("click", async () => {
+      reportButton.disabled = true;
+      try {
+        await reportSharedPost(post);
+      } catch (error) {
+        reportButton.disabled = false;
+        showToast(error.message || "Could not report this shot.");
+      }
     });
 
     feedGrid.append(node);
@@ -554,12 +660,14 @@ function bindEvents() {
     button.addEventListener("click", () => document.querySelector(button.dataset.jump).scrollIntoView({ behavior: "smooth" }));
   });
 
-  qs("#photoUpload").addEventListener("change", (event) => {
+  qs("#photoUpload").addEventListener("change", async (event) => {
     const [file] = event.target.files;
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      uploadedImage = reader.result;
+    qs("#uploadStatus").textContent = "Preparing photo...";
+    qs("#uploadStatus").classList.remove("ready");
+    setAppStatus("Preparing photo...", "ready", 3000);
+    try {
+      uploadedImage = await prepareUploadImage(file);
       qs("#uploadPreview").src = uploadedImage;
       qs("#uploadPreview").style.display = "block";
       qs(".upload-box").classList.add("has-image");
@@ -568,14 +676,13 @@ function bindEvents() {
       qs("#uploadStatus").classList.add("ready");
       setAppStatus("Picture selected. Press Publish to add it to Feed.", "ready", 5000);
       showToast("Picture selected.");
-    };
-    reader.onerror = () => {
+    } catch (error) {
       uploadedImage = "";
-      qs("#uploadStatus").textContent = "That picture could not be read. Try another file.";
+      event.target.value = "";
+      qs("#uploadStatus").textContent = error.message || "That picture could not be read. Try another file.";
       qs("#uploadStatus").classList.remove("ready");
       showToast("Picture could not be added.");
-    };
-    reader.readAsDataURL(file);
+    }
   });
 
   qs("#shareForm").addEventListener("submit", async (event) => {
