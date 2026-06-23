@@ -30,6 +30,20 @@ Render Free web services can spin down after 15 minutes without inbound traffic.
 
 For true guaranteed always-on hosting, move the Render service from Free to a paid instance type. The scheduled ping is a free-tier workaround and uses GitHub Actions plus Render free instance hours.
 
+## Shared Photo Submissions
+
+LensLog now has backend endpoints for real shared submissions:
+
+- `GET /api/posts` returns the shared feed.
+- `POST /api/posts` publishes a photo and settings.
+- Uploaded images are saved under the server data directory and served from `/uploads/...`.
+
+For a public Instagram launch, configure persistent storage before collecting real submissions. Render Free files are not permanent across restarts/redeploys. Use one of these before launch:
+
+- Render paid instance with a persistent disk and `DATA_DIR` pointed at that disk.
+- External storage such as Cloudinary, S3, Firebase Storage, or Supabase Storage.
+- A hosted database for post metadata if you want moderation, search, deletion, and admin review.
+
 ## Google Readiness
 
 Included:

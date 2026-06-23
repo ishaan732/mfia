@@ -112,6 +112,7 @@ const defaultState = {
     location: ""
   },
   posts: samplePosts,
+  myPostIds: [],
   liked: [],
   theme: "light"
 };
@@ -144,6 +145,7 @@ function loadState() {
         ...clone(defaultState.profile),
         ...(saved.profile || {})
       },
+      myPostIds: saved.myPostIds || [],
       liked: saved.liked || []
     };
     merged.posts = (saved.posts && saved.posts.length ? saved.posts : samplePosts).map((post) => migratePost(post, merged.userId));
@@ -155,6 +157,83 @@ function loadState() {
 
 function saveState() {
   return writeStored(STORAGE_KEY, JSON.stringify(state));
+}
+
+function canUseApi() {
+  return location.protocol === "http:" || location.protocol === "https:";
+}
+
+function normalizeApiPost(post) {
+  return {
+    id: post.id,
+    title: post.title,
+    location: post.location,
+    camera: post.camera,
+    lens: post.lens,
+    iso: post.iso,
+    aperture: post.aperture,
+    shutter: post.shutter,
+    category: post.category || "Photo",
+    story: post.story || "",
+    author: post.author || "LensLog Photographer",
+    image: post.image,
+    likes: post.likes || 0,
+    createdAt: post.createdAt || Date.now(),
+    mine: state.myPostIds.includes(post.id)
+  };
+}
+
+async function loadSharedPosts() {
+  if (!canUseApi()) return;
+
+  try {
+    const response = await fetch("/api/posts", {
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Could not load shared posts.");
+
+    const sharedPosts = data.posts.map(normalizeApiPost);
+    const localOnlyMine = state.posts.filter((post) => isMine(post) && !sharedPosts.some((shared) => shared.id === post.id));
+    state.posts = [...localOnlyMine, ...sharedPosts, ...samplePosts];
+    renderPosts();
+    updateProfileUI();
+  } catch {
+    showToast("Shared feed could not refresh. Showing saved posts.");
+  }
+}
+
+async function publishSharedPost(post) {
+  if (!canUseApi()) return { ok: false, offline: true };
+
+  const response = await fetch("/api/posts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify({
+      title: post.title,
+      location: post.location,
+      camera: post.camera,
+      lens: post.lens,
+      iso: post.iso,
+      aperture: post.aperture,
+      shutter: post.shutter,
+      category: post.category,
+      story: post.story,
+      author: post.author,
+      authorEmail: state.profile.email,
+      imageData: post.image,
+      consent: qs("#consentInput").checked,
+      website: ""
+    })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error(data.error || "Could not publish this photo.");
+  return { ok: true, post: normalizeApiPost(data.post) };
 }
 
 function migratePost(post, userId) {
@@ -194,7 +273,7 @@ function currentAuthor(profile = state.profile) {
 }
 
 function isMine(post) {
-  return post.mine === true || post.ownerId === state.userId || (state.profile.email && post.ownerEmail === state.profile.email);
+  return state.myPostIds.includes(post.id) || post.mine === true || post.ownerId === state.userId || (state.profile.email && post.ownerEmail === state.profile.email);
 }
 
 function claimMinePosts() {
@@ -499,7 +578,7 @@ function bindEvents() {
     reader.readAsDataURL(file);
   });
 
-  qs("#shareForm").addEventListener("submit", (event) => {
+  qs("#shareForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!uploadedImage) {
       qs("#uploadStatus").textContent = "Add a picture before publishing.";
@@ -508,8 +587,14 @@ function bindEvents() {
       showToast("Add a picture before publishing.");
       return;
     }
+    if (!qs("#consentInput").checked) {
+      showToast("Confirm that the photo can be shared publicly.");
+      qs("#consentInput").focus();
+      return;
+    }
+
     const author = currentAuthor();
-    const post = {
+    let post = {
       id: uid(),
       mine: true,
       ownerId: state.userId,
@@ -528,6 +613,27 @@ function bindEvents() {
       likes: 0,
       createdAt: Date.now()
     };
+
+    try {
+      const shared = await publishSharedPost(post);
+      if (shared.ok) {
+        post = {
+          ...shared.post,
+          mine: true,
+          ownerId: state.userId,
+          ownerEmail: state.profile.email
+        };
+      }
+    } catch (error) {
+      qs("#uploadStatus").textContent = error.message || "Could not publish. Try again.";
+      qs("#uploadStatus").classList.remove("ready");
+      showToast(error.message || "Could not publish. Try again.");
+      return;
+    }
+
+    if (!state.myPostIds.includes(post.id)) {
+      state.myPostIds = [post.id, ...state.myPostIds].slice(0, 500);
+    }
     state.posts = [post, ...state.posts];
     newestPostId = post.id;
     const persisted = saveState();
@@ -582,6 +688,7 @@ function startApp() {
     updateActiveNav();
     registerServiceWorker();
     setAppStatus("LensLog ready.", "ready", 1800);
+    loadSharedPosts();
   } catch (error) {
     setAppStatus("LensLog could not start. Refresh the page.", "error");
     console.error(error);

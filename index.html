@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://images.unsplash.com" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=13" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -31,7 +31,7 @@
       }
     </script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="./app.js?v=13" defer></script>
+    <script src="./app.js?v=14" defer></script>
   </head>
   <body>
     <noscript>
@@ -198,6 +198,10 @@
             <label class="field full">
               <span>Story</span>
               <textarea id="storyInput" rows="4" placeholder="What made this frame work?"></textarea>
+            </label>
+            <label class="check-row full">
+              <input id="consentInput" type="checkbox" required />
+              <span>I own this photo and agree it can be shown publicly on LensLog.</span>
             </label>
             <button class="primary-button full" type="submit">
               <i data-lucide="send"></i>
