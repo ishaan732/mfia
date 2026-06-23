@@ -24,6 +24,12 @@ Render settings:
 
 If the existing Render service is connected to this GitHub repo, commit and push these files. Render should redeploy automatically.
 
+## Always Online
+
+Render Free web services can spin down after 15 minutes without inbound traffic. This repo includes a GitHub Actions workflow at `.github/workflows/keep-render-awake.yml` that pings `https://lenslog.onrender.com/api/health` every 10 minutes.
+
+For true guaranteed always-on hosting, move the Render service from Free to a paid instance type. The scheduled ping is a free-tier workaround and uses GitHub Actions plus Render free instance hours.
+
 ## Google Readiness
 
 Included:
