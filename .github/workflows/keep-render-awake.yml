@@ -8,9 +8,24 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 6
     steps:
       - name: Ping Render health endpoint
+        env:
+          HEALTH_URL: https://lenslog.onrender.com/api/health
         run: |
-          curl --fail --silent --show-error --max-time 30 \
-            https://lenslog.onrender.com/api/health
+          for attempt in {1..10}; do
+            echo "Ping attempt $attempt"
+            body="$(curl --location --silent --show-error --max-time 60 "$HEALTH_URL" || true)"
+            echo "$body"
+
+            if echo "$body" | grep -q '"ok":true' && echo "$body" | grep -q '"app":"LensLog"'; then
+              echo "LensLog is awake."
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "LensLog health endpoint did not return the expected response."
+          exit 1
