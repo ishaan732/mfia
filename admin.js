@@ -133,7 +133,7 @@ function renderPasses(passes) {
           <div>
             <strong>${escapeHtml(pass.label)}</strong>
             <span>${escapeHtml(pass.email || "No Gmail set")}</span>
-            <span>Admin pass - created ${fmtDate(pass.createdAt)}</span>
+            <span>Admin pass ${pass.number ? `#${String(pass.number).padStart(3, "0")}` : ""} - created ${fmtDate(pass.createdAt)}</span>
             <span>Last used: ${fmtDate(pass.lastUsedAt)}</span>
           </div>
           <div class="admin-row-actions">

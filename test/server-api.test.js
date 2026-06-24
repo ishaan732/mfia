@@ -131,14 +131,14 @@ test("photo submissions are published, reported, and removable", async () => {
 
   const ownerSession = await api("/api/admin/session", {
     method: "POST",
-    body: JSON.stringify({ passCode: "test-admin" })
+    body: JSON.stringify({ passCode: "ishaan" })
   });
   assert.equal(ownerSession.status, 200);
   assert.equal(ownerSession.body.access.role, "owner");
 
   const adminPass = await api("/api/admin/passes", {
     method: "POST",
-    headers: { "X-Admin-Pass": "test-admin" },
+    headers: { "X-Admin-Pass": "ishaan" },
     body: JSON.stringify({
       label: "Test Admin",
       email: "admin@gmail.com"
@@ -146,7 +146,8 @@ test("photo submissions are published, reported, and removable", async () => {
   });
   assert.equal(adminPass.status, 201);
   assert.equal(adminPass.body.pass.role, "admin");
-  assert.match(adminPass.body.code, /^LL-[a-f0-9]{4}/);
+  assert.equal(adminPass.body.pass.number, 1);
+  assert.match(adminPass.body.code, /^ADMIN-001-[A-F0-9]{3}/);
 
   const adminListWithPass = await api("/api/admin/posts", {
     headers: { "X-Admin-Pass": adminPass.body.code }
@@ -172,7 +173,7 @@ test("photo submissions are published, reported, and removable", async () => {
 
   const revokedPass = await api(`/api/admin/passes/${adminPass.body.pass.id}`, {
     method: "DELETE",
-    headers: { "X-Admin-Pass": "test-admin" }
+    headers: { "X-Admin-Pass": "ishaan" }
   });
   assert.equal(revokedPass.status, 200);
   assert.equal(revokedPass.body.pass.revokedAt > 0, true);

@@ -13,7 +13,9 @@ const POSTS_FILE = path.join(DATA_DIR, "posts.json");
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
 const PASSES_FILE = path.join(DATA_DIR, "passes.json");
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
+const OWNER_CODE = process.env.OWNER_CODE || "ishaan";
 const AUTO_HIDE_REPORT_COUNT = Number(process.env.AUTO_HIDE_REPORT_COUNT) || 5;
+const MAX_ADMIN_PASSES = 100;
 const MAX_BODY_BYTES = 7 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
@@ -153,6 +155,7 @@ function publicPass(pass) {
   const details = roleDetails(pass.role);
   return {
     id: pass.id,
+    number: pass.number || null,
     label: pass.label,
     email: pass.email || "",
     role: pass.role,
@@ -177,8 +180,8 @@ function safeEqual(value, expected) {
 }
 
 function generatePassCode() {
-  const groups = crypto.randomBytes(12).toString("hex").match(/.{1,4}/g) || [];
-  return `LL-${groups.join("-")}`;
+  const groups = crypto.randomBytes(9).toString("hex").match(/.{1,3}/g) || [];
+  return groups.join("-").toUpperCase();
 }
 
 function hasPermission(access, permission) {
@@ -191,6 +194,21 @@ function canManagePasses(access) {
 
 function isUsableStoredPass(pass) {
   return pass && pass.role === "admin" && !pass.revokedAt;
+}
+
+function nextAdminPassNumber(passes) {
+  const activeNumbers = new Set(
+    passes
+      .filter(isUsableStoredPass)
+      .map((pass) => Number(pass.number))
+      .filter((number) => Number.isInteger(number) && number >= 1 && number <= MAX_ADMIN_PASSES)
+  );
+
+  for (let number = 1; number <= MAX_ADMIN_PASSES; number += 1) {
+    if (!activeNumbers.has(number)) return number;
+  }
+
+  return 0;
 }
 
 function visiblePosts(posts) {
@@ -514,7 +532,9 @@ async function authenticateSecret(secret, options = {}) {
   const value = String(secret || "").trim();
   if (!value) return null;
 
-  if (ADMIN_TOKEN && safeEqual(hashSecret(value), hashSecret(ADMIN_TOKEN))) {
+  const ownerCodes = [OWNER_CODE, ADMIN_TOKEN].filter(Boolean);
+  const isOwnerCode = ownerCodes.some((code) => safeEqual(hashSecret(value), hashSecret(code)));
+  if (isOwnerCode) {
     return {
       id: "owner",
       label: "Site Owner",
@@ -651,21 +671,27 @@ async function createAdminPass(requestUrl, request, response) {
 
     if (!label) throw new Error("Add a name for this pass.");
 
-    const code = generatePassCode();
-    const pass = {
-      id: makeId(),
-      label,
-      email,
-      role,
-      codeHash: hashSecret(code),
-      createdAt: Date.now(),
-      createdBy: access.label,
-      revokedAt: null,
-      lastUsedAt: null
-    };
+    let code = "";
+    let pass = null;
 
     await withPassesLock(async () => {
       const passes = await readPasses();
+      const number = nextAdminPassNumber(passes);
+      if (!number) throw new Error("All 100 admin pass slots are used. Revoke one before creating another.");
+
+      code = `ADMIN-${String(number).padStart(3, "0")}-${generatePassCode()}`;
+      pass = {
+        id: makeId(),
+        number,
+        label,
+        email,
+        role,
+        codeHash: hashSecret(code),
+        createdAt: Date.now(),
+        createdBy: access.label,
+        revokedAt: null,
+        lastUsedAt: null
+      };
       passes.unshift(pass);
       await writePasses(passes.slice(0, 500));
     });
