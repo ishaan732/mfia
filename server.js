@@ -11,6 +11,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const POSTS_FILE = path.join(DATA_DIR, "posts.json");
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
+const PASSES_FILE = path.join(DATA_DIR, "passes.json");
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
 const AUTO_HIDE_REPORT_COUNT = Number(process.env.AUTO_HIDE_REPORT_COUNT) || 5;
 const MAX_BODY_BYTES = 7 * 1024 * 1024;
@@ -22,6 +23,26 @@ const postRateLimits = new Map();
 const reportRateLimits = new Map();
 let postsQueue = Promise.resolve();
 let reportsQueue = Promise.resolve();
+let passesQueue = Promise.resolve();
+
+const ROLE_DEFINITIONS = {
+  owner: {
+    label: "Owner",
+    permissions: ["viewAdmin", "moderatePosts", "managePasses", "issueOwner"]
+  },
+  admin: {
+    label: "Admin",
+    permissions: ["viewAdmin", "moderatePosts", "managePasses"]
+  },
+  moderator: {
+    label: "Moderator",
+    permissions: ["viewAdmin", "moderatePosts"]
+  },
+  viewer: {
+    label: "Viewer",
+    permissions: ["viewAdmin"]
+  }
+};
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -120,6 +141,65 @@ function adminPost(post) {
   };
 }
 
+function roleDetails(role) {
+  return ROLE_DEFINITIONS[role] || ROLE_DEFINITIONS.viewer;
+}
+
+function publicAccess(access) {
+  const details = roleDetails(access.role);
+  return {
+    id: access.id || "owner",
+    label: access.label || details.label,
+    email: access.email || "",
+    role: access.role,
+    roleLabel: details.label,
+    permissions: details.permissions
+  };
+}
+
+function publicPass(pass) {
+  const details = roleDetails(pass.role);
+  return {
+    id: pass.id,
+    label: pass.label,
+    email: pass.email || "",
+    role: pass.role,
+    roleLabel: details.label,
+    permissions: details.permissions,
+    createdAt: pass.createdAt,
+    createdBy: pass.createdBy || "",
+    revokedAt: pass.revokedAt || null,
+    revokedBy: pass.revokedBy || "",
+    lastUsedAt: pass.lastUsedAt || null
+  };
+}
+
+function hashSecret(secret) {
+  return crypto.createHash("sha256").update(String(secret || "")).digest("hex");
+}
+
+function safeEqual(value, expected) {
+  const left = Buffer.from(String(value || ""));
+  const right = Buffer.from(String(expected || ""));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function generatePassCode() {
+  const groups = crypto.randomBytes(12).toString("hex").match(/.{1,4}/g) || [];
+  return `LL-${groups.join("-")}`;
+}
+
+function hasPermission(access, permission) {
+  return Boolean(access && roleDetails(access.role).permissions.includes(permission));
+}
+
+function canIssueRole(access, targetRole) {
+  if (!access) return false;
+  if (access.role === "owner") return Boolean(ROLE_DEFINITIONS[targetRole]);
+  if (access.role === "admin") return targetRole === "moderator" || targetRole === "viewer";
+  return false;
+}
+
 function visiblePosts(posts) {
   return posts.filter((post) => !post.hidden && !post.deletedAt);
 }
@@ -128,6 +208,7 @@ async function ensureDataStore() {
   await fsp.mkdir(UPLOAD_DIR, { recursive: true });
   await ensureJsonArrayFile(POSTS_FILE);
   await ensureJsonArrayFile(REPORTS_FILE);
+  await ensureJsonArrayFile(PASSES_FILE);
 }
 
 async function ensureJsonArrayFile(filePath) {
@@ -172,6 +253,14 @@ async function writeReports(reports) {
   await writeJsonArray(REPORTS_FILE, reports);
 }
 
+async function readPasses() {
+  return readJsonArray(PASSES_FILE);
+}
+
+async function writePasses(passes) {
+  await writeJsonArray(PASSES_FILE, passes);
+}
+
 function withPostsLock(task) {
   const run = postsQueue.then(task, task);
   postsQueue = run.catch(() => {});
@@ -181,6 +270,12 @@ function withPostsLock(task) {
 function withReportsLock(task) {
   const run = reportsQueue.then(task, task);
   reportsQueue = run.catch(() => {});
+  return run;
+}
+
+function withPassesLock(task) {
+  const run = passesQueue.then(task, task);
+  passesQueue = run.catch(() => {});
   return run;
 }
 
@@ -412,29 +507,78 @@ async function reportPost(request, response) {
 }
 
 function getAdminToken(requestUrl, request) {
+  const passHeader = request.headers["x-admin-pass"];
   const header = request.headers["x-admin-token"];
   const authorization = String(request.headers.authorization || "");
+  if (passHeader) return String(passHeader);
   if (header) return String(header);
   if (authorization.startsWith("Bearer ")) return authorization.slice(7);
+  if (requestUrl.searchParams.has("pass")) return requestUrl.searchParams.get("pass") || "";
   return requestUrl.searchParams.get("token") || "";
 }
 
-function requireAdmin(requestUrl, request, response) {
-  if (!ADMIN_TOKEN || getAdminToken(requestUrl, request) !== ADMIN_TOKEN) {
-    sendJson(response, 403, { ok: false, error: "Admin access denied." });
-    return false;
+async function authenticateSecret(secret, options = {}) {
+  const value = String(secret || "").trim();
+  if (!value) return null;
+
+  if (ADMIN_TOKEN && safeEqual(hashSecret(value), hashSecret(ADMIN_TOKEN))) {
+    return {
+      id: "owner",
+      label: "Site Owner",
+      email: "",
+      role: "owner",
+      source: "environment"
+    };
   }
-  return true;
+
+  const codeHash = hashSecret(value);
+  let access = null;
+
+  await withPassesLock(async () => {
+    const passes = await readPasses();
+    const pass = passes.find((item) => item.codeHash === codeHash && !item.revokedAt);
+    if (!pass) return;
+
+    if (options.touch) {
+      pass.lastUsedAt = Date.now();
+      await writePasses(passes);
+    }
+
+    access = {
+      id: pass.id,
+      label: pass.label,
+      email: pass.email || "",
+      role: pass.role,
+      source: "pass"
+    };
+  });
+
+  return access;
+}
+
+async function authenticateAdmin(requestUrl, request) {
+  return authenticateSecret(getAdminToken(requestUrl, request));
+}
+
+async function requireAdmin(requestUrl, request, response, permission) {
+  const access = await authenticateAdmin(requestUrl, request);
+  if (!access || (permission && !hasPermission(access, permission))) {
+    sendJson(response, 403, { ok: false, error: "Admin access denied." });
+    return null;
+  }
+  return access;
 }
 
 async function listAdminPosts(requestUrl, request, response) {
-  if (!requireAdmin(requestUrl, request, response)) return;
+  const access = await requireAdmin(requestUrl, request, response, "viewAdmin");
+  if (!access) return;
   const posts = await readPosts();
-  sendJson(response, 200, { ok: true, posts: posts.map(adminPost) });
+  sendJson(response, 200, { ok: true, access: publicAccess(access), posts: posts.map(adminPost) });
 }
 
 async function updateAdminPost(requestUrl, request, response, postId) {
-  if (!requireAdmin(requestUrl, request, response)) return;
+  const access = await requireAdmin(requestUrl, request, response, "moderatePosts");
+  if (!access) return;
 
   try {
     const body = request.method === "PATCH" ? await readBody(request) : {};
@@ -449,11 +593,11 @@ async function updateAdminPost(requestUrl, request, response, postId) {
       if (request.method === "DELETE") {
         post.hidden = true;
         post.deletedAt = Date.now();
-        post.hiddenReason = "Removed by admin";
+        post.hiddenReason = `Removed by ${access.label}`;
         uploadToRemove = post.image;
       } else {
         post.hidden = Boolean(body.hidden);
-        post.hiddenReason = post.hidden ? cleanText(body.hiddenReason, 120) || "Hidden by admin" : "";
+        post.hiddenReason = post.hidden ? cleanText(body.hiddenReason, 120) || `Hidden by ${access.label}` : "";
         if (body.deletedAt === null) post.deletedAt = null;
       }
 
@@ -469,6 +613,93 @@ async function updateAdminPost(requestUrl, request, response, postId) {
     sendJson(response, 200, { ok: true, post: updatedPost });
   } catch (error) {
     sendJson(response, 400, { ok: false, error: error.message || "Could not update this photo." });
+  }
+}
+
+async function createAdminSession(request, response) {
+  try {
+    const body = await readBody(request);
+    const access = await authenticateSecret(body.passCode, { touch: true });
+    if (!access) {
+      sendJson(response, 403, { ok: false, error: "That pass is not allowed." });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, access: publicAccess(access) });
+  } catch (error) {
+    sendJson(response, 400, { ok: false, error: error.message || "Could not check that pass." });
+  }
+}
+
+async function listAdminPasses(requestUrl, request, response) {
+  const access = await requireAdmin(requestUrl, request, response, "managePasses");
+  if (!access) return;
+  const passes = await readPasses();
+  sendJson(response, 200, { ok: true, access: publicAccess(access), passes: passes.map(publicPass) });
+}
+
+async function createAdminPass(requestUrl, request, response) {
+  const access = await requireAdmin(requestUrl, request, response, "managePasses");
+  if (!access) return;
+
+  try {
+    const body = await readBody(request);
+    const role = cleanText(body.role, 20).toLowerCase() || "viewer";
+    const label = cleanText(body.label, 80);
+    const email = cleanEmail(body.email);
+
+    if (!label) throw new Error("Add a name for this pass.");
+    if (!ROLE_DEFINITIONS[role]) throw new Error("Choose a valid pass type.");
+    if (!canIssueRole(access, role)) throw new Error("This pass cannot create that allowance level.");
+
+    const code = generatePassCode();
+    const pass = {
+      id: makeId(),
+      label,
+      email,
+      role,
+      codeHash: hashSecret(code),
+      createdAt: Date.now(),
+      createdBy: access.label,
+      revokedAt: null,
+      lastUsedAt: null
+    };
+
+    await withPassesLock(async () => {
+      const passes = await readPasses();
+      passes.unshift(pass);
+      await writePasses(passes.slice(0, 500));
+    });
+
+    sendJson(response, 201, { ok: true, pass: publicPass(pass), code });
+  } catch (error) {
+    sendJson(response, 400, { ok: false, error: error.message || "Could not create this pass." });
+  }
+}
+
+async function revokeAdminPass(requestUrl, request, response, passId) {
+  const access = await requireAdmin(requestUrl, request, response, "managePasses");
+  if (!access) return;
+
+  try {
+    let revokedPass = null;
+
+    await withPassesLock(async () => {
+      const passes = await readPasses();
+      const pass = passes.find((item) => item.id === passId);
+      if (!pass) throw new Error("Pass not found.");
+      if (pass.id === access.id) throw new Error("You cannot revoke the pass you are using.");
+      if (pass.role === "owner" && access.role !== "owner") throw new Error("Only the owner can revoke owner passes.");
+
+      pass.revokedAt = pass.revokedAt || Date.now();
+      pass.revokedBy = access.label;
+      revokedPass = publicPass(pass);
+      await writePasses(passes);
+    });
+
+    sendJson(response, 200, { ok: true, pass: revokedPass });
+  } catch (error) {
+    sendJson(response, 400, { ok: false, error: error.message || "Could not revoke this pass." });
   }
 }
 
@@ -535,8 +766,29 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (requestUrl.pathname === "/api/admin/session" && request.method === "POST") {
+    await createAdminSession(request, response);
+    return;
+  }
+
   if (requestUrl.pathname === "/api/admin/posts" && request.method === "GET") {
     await listAdminPosts(requestUrl, request, response);
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/admin/passes" && request.method === "GET") {
+    await listAdminPasses(requestUrl, request, response);
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/admin/passes" && request.method === "POST") {
+    await createAdminPass(requestUrl, request, response);
+    return;
+  }
+
+  const adminPassMatch = /^\/api\/admin\/passes\/([^/]+)$/.exec(requestUrl.pathname);
+  if (adminPassMatch && request.method === "DELETE") {
+    await revokeAdminPass(requestUrl, request, response, adminPassMatch[1]);
     return;
   }
 

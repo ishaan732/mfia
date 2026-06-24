@@ -887,6 +887,180 @@ dd {
   font-weight: 850;
 }
 
+.admin-shell {
+  width: min(1280px, 100%);
+  margin: 0 auto;
+  padding: 28px clamp(16px, 3vw, 36px) 64px;
+}
+
+.admin-panel,
+.admin-hero {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.admin-panel {
+  padding: 20px;
+}
+
+.admin-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.admin-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding: 24px;
+}
+
+.admin-hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 1;
+}
+
+.admin-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 210px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.admin-identity div {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-identity span:last-child,
+.admin-row span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.admin-panel-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.admin-form {
+  display: grid;
+  gap: 2px;
+}
+
+.new-pass-box {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.new-pass-box textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-weight: 850;
+}
+
+.admin-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.admin-row > div:first-of-type {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.admin-row strong {
+  overflow-wrap: anywhere;
+}
+
+.admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.post-admin-row {
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+}
+
+.post-admin-row img {
+  width: 86px;
+  height: 86px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.is-revoked {
+  opacity: 0.68;
+}
+
+.danger-button {
+  color: #b42318;
+}
+
+.admin-empty {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-weight: 850;
+}
+
 @media (max-width: 960px) {
   .topbar {
     grid-template-columns: 1fr auto;
@@ -900,7 +1074,8 @@ dd {
 
   .app-shell,
   .share-form,
-  .profile-layout {
+  .profile-layout,
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 
@@ -913,6 +1088,14 @@ dd {
   .profile-details,
   .mini-shot-grid {
     grid-template-columns: 1fr;
+  }
+
+  .post-admin-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .post-admin-row .admin-row-actions {
+    grid-column: 1 / -1;
   }
 }
 
@@ -953,5 +1136,32 @@ dd {
   .site-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .admin-login,
+  .admin-row,
+  .post-admin-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-hero,
+  .admin-panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .post-admin-row img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+
+  .admin-row-actions {
+    justify-content: stretch;
+  }
+
+  .admin-row-actions .secondary-button,
+  .admin-row-actions .admin-pill {
+    flex: 1 1 auto;
   }
 }

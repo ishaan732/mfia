@@ -125,8 +125,54 @@ test("photo submissions are published, reported, and removable", async () => {
     headers: { "X-Admin-Token": "test-admin" }
   });
   assert.equal(adminList.status, 200);
+  assert.equal(adminList.body.access.role, "owner");
   assert.equal(adminList.body.posts[0].hidden, true);
   assert.equal(adminList.body.posts[0].reports, 1);
+
+  const ownerSession = await api("/api/admin/session", {
+    method: "POST",
+    body: JSON.stringify({ passCode: "test-admin" })
+  });
+  assert.equal(ownerSession.status, 200);
+  assert.equal(ownerSession.body.access.role, "owner");
+
+  const moderatorPass = await api("/api/admin/passes", {
+    method: "POST",
+    headers: { "X-Admin-Pass": "test-admin" },
+    body: JSON.stringify({
+      label: "Test Moderator",
+      email: "mod@gmail.com",
+      role: "moderator"
+    })
+  });
+  assert.equal(moderatorPass.status, 201);
+  assert.equal(moderatorPass.body.pass.role, "moderator");
+  assert.match(moderatorPass.body.code, /^LL-[a-f0-9]{4}/);
+
+  const moderatorList = await api("/api/admin/posts", {
+    headers: { "X-Admin-Pass": moderatorPass.body.code }
+  });
+  assert.equal(moderatorList.status, 200);
+  assert.equal(moderatorList.body.access.role, "moderator");
+  assert.equal(moderatorList.body.posts.length, 1);
+
+  const deniedPassList = await api("/api/admin/passes", {
+    headers: { "X-Admin-Pass": moderatorPass.body.code }
+  });
+  assert.equal(deniedPassList.status, 403);
+
+  const revokedPass = await api(`/api/admin/passes/${moderatorPass.body.pass.id}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Pass": "test-admin" }
+  });
+  assert.equal(revokedPass.status, 200);
+  assert.equal(revokedPass.body.pass.revokedAt > 0, true);
+
+  const revokedCannotEnter = await api("/api/admin/session", {
+    method: "POST",
+    body: JSON.stringify({ passCode: moderatorPass.body.code })
+  });
+  assert.equal(revokedCannotEnter.status, 403);
 
   const removed = await api(`/api/admin/posts/${created.body.post.id}`, {
     method: "DELETE",

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#0f766e" />
+    <title>LensLog Admin</title>
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css?v=16" />
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="./admin.js?v=16" defer></script>
+  </head>
+  <body class="admin-page">
+    <header class="topbar">
+      <a class="brand" href="./index.html#feed" aria-label="LensLog home">
+        <span class="brand-mark">LL</span>
+        <span>LensLog Admin</span>
+      </a>
+      <nav class="nav-tabs" aria-label="Admin">
+        <a class="nav-tab active" href="./admin.html">Admin</a>
+        <a class="nav-tab" href="./index.html#feed">Feed</a>
+      </nav>
+      <div class="top-actions">
+        <button class="ghost-button" id="forgetPass" type="button" hidden>
+          <i data-lucide="log-out"></i>
+          Forget pass
+        </button>
+      </div>
+    </header>
+
+    <main class="admin-shell">
+      <section class="admin-panel" id="loginPanel">
+        <div class="section-heading compact-heading">
+          <p class="eyebrow">Private access</p>
+          <h1>Enter an admin pass</h1>
+        </div>
+        <form class="admin-login" id="loginForm">
+          <label class="field">
+            <span>Pass</span>
+            <input id="passCodeInput" autocomplete="off" required type="password" placeholder="Owner or staff pass" />
+          </label>
+          <button class="primary-button" type="submit">
+            <i data-lucide="shield-check"></i>
+            Unlock
+          </button>
+        </form>
+        <p class="profile-status" id="loginStatus" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="dashboardPanel" hidden>
+        <div class="admin-hero">
+          <div>
+            <p class="eyebrow">Control room</p>
+            <h1>Passes and moderation</h1>
+          </div>
+          <div class="admin-identity">
+            <span class="avatar" id="adminAvatar">AD</span>
+            <div>
+              <strong id="adminName">Admin</strong>
+              <span id="adminRole">Viewer</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-grid">
+          <section class="admin-panel" id="passPanel">
+            <div class="admin-panel-head">
+              <div>
+                <p class="eyebrow">Allowances</p>
+                <h2>Give someone a pass</h2>
+              </div>
+              <button class="ghost-button" id="refreshPasses" type="button">
+                <i data-lucide="refresh-cw"></i>
+                Refresh
+              </button>
+            </div>
+            <form class="admin-form" id="passForm">
+              <label class="field">
+                <span>Name</span>
+                <input id="passLabelInput" maxlength="80" required placeholder="Aarav Moderator" />
+              </label>
+              <label class="field">
+                <span>Gmail ID</span>
+                <input id="passEmailInput" maxlength="120" inputmode="email" placeholder="aarav@gmail.com" />
+              </label>
+              <label class="field">
+                <span>Allowance</span>
+                <select id="passRoleInput"></select>
+              </label>
+              <button class="primary-button" type="submit">
+                <i data-lucide="ticket-plus"></i>
+                Create pass
+              </button>
+            </form>
+            <div class="new-pass-box" id="newPassBox" hidden>
+              <strong>New pass</strong>
+              <textarea id="newPassCode" readonly rows="2"></textarea>
+              <button class="secondary-button" id="copyPass" type="button">
+                <i data-lucide="copy"></i>
+                Copy
+              </button>
+            </div>
+            <div class="admin-list" id="passList" aria-live="polite"></div>
+          </section>
+
+          <section class="admin-panel">
+            <div class="admin-panel-head">
+              <div>
+                <p class="eyebrow">Review</p>
+                <h2>Shared photos</h2>
+              </div>
+              <button class="ghost-button" id="refreshPosts" type="button">
+                <i data-lucide="refresh-cw"></i>
+                Refresh
+              </button>
+            </div>
+            <div class="admin-list post-admin-list" id="adminPostList" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
