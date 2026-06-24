@@ -7,9 +7,9 @@
     <meta name="theme-color" content="#0f766e" />
     <title>LensLog Admin</title>
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=16" />
+    <link rel="stylesheet" href="./styles.css?v=17" />
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="./admin.js?v=16" defer></script>
+    <script src="./admin.js?v=17" defer></script>
   </head>
   <body class="admin-page">
     <header class="topbar">
@@ -38,7 +38,7 @@
         <form class="admin-login" id="loginForm">
           <label class="field">
             <span>Pass</span>
-            <input id="passCodeInput" autocomplete="off" required type="password" placeholder="Owner or staff pass" />
+            <input id="passCodeInput" autocomplete="off" required type="password" placeholder="Owner or admin pass" />
           </label>
           <button class="primary-button" type="submit">
             <i data-lucide="shield-check"></i>
@@ -52,7 +52,7 @@
         <div class="admin-hero">
           <div>
             <p class="eyebrow">Control room</p>
-            <h1>Passes and moderation</h1>
+            <h1>Admin passes and moderation</h1>
           </div>
           <div class="admin-identity">
             <span class="avatar" id="adminAvatar">AD</span>
@@ -67,8 +67,8 @@
           <section class="admin-panel" id="passPanel">
             <div class="admin-panel-head">
               <div>
-                <p class="eyebrow">Allowances</p>
-                <h2>Give someone a pass</h2>
+                <p class="eyebrow">Admin access</p>
+                <h2>Give someone an admin pass</h2>
               </div>
               <button class="ghost-button" id="refreshPasses" type="button">
                 <i data-lucide="refresh-cw"></i>
@@ -78,19 +78,15 @@
             <form class="admin-form" id="passForm">
               <label class="field">
                 <span>Name</span>
-                <input id="passLabelInput" maxlength="80" required placeholder="Aarav Moderator" />
+                <input id="passLabelInput" maxlength="80" required placeholder="Aarav Admin" />
               </label>
               <label class="field">
                 <span>Gmail ID</span>
                 <input id="passEmailInput" maxlength="120" inputmode="email" placeholder="aarav@gmail.com" />
               </label>
-              <label class="field">
-                <span>Allowance</span>
-                <select id="passRoleInput"></select>
-              </label>
               <button class="primary-button" type="submit">
                 <i data-lucide="ticket-plus"></i>
-                Create pass
+                Create admin pass
               </button>
             </form>
             <div class="new-pass-box" id="newPassBox" hidden>

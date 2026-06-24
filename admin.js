@@ -50,6 +50,10 @@ function permission(name) {
   return access?.permissions?.includes(name);
 }
 
+function isOwner() {
+  return access?.role === "owner";
+}
+
 async function api(path, options = {}) {
   const headers = {
     "Accept": "application/json",
@@ -87,8 +91,7 @@ function showDashboard() {
   qs("#adminName").textContent = access.label;
   qs("#adminRole").textContent = access.roleLabel;
   qs("#adminAvatar").textContent = initials(access.label);
-  qs("#passPanel").hidden = !permission("managePasses");
-  setRoleOptions();
+  qs("#passPanel").hidden = !isOwner();
   refreshIcons();
 }
 
@@ -101,31 +104,12 @@ function showLogin(message = "") {
   refreshIcons();
 }
 
-function setRoleOptions() {
-  const roleInput = qs("#passRoleInput");
-  if (!roleInput) return;
-  const roles =
-    access?.role === "owner"
-      ? [
-          ["owner", "Owner"],
-          ["admin", "Admin"],
-          ["moderator", "Moderator"],
-          ["viewer", "Viewer"]
-        ]
-      : [
-          ["moderator", "Moderator"],
-          ["viewer", "Viewer"]
-        ];
-
-  roleInput.innerHTML = roles.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
-}
-
 async function loadDashboard() {
   const posts = await api("/api/admin/posts");
   if (posts.access) access = posts.access;
   renderPosts(posts.posts);
 
-  if (permission("managePasses")) {
+  if (isOwner()) {
     const passes = await api("/api/admin/passes");
     renderPasses(passes.passes);
   }
@@ -143,13 +127,13 @@ function renderPasses(passes) {
   list.innerHTML = passes
     .map((pass) => {
       const revoked = Boolean(pass.revokedAt);
-      const canRevoke = !revoked && pass.id !== access.id && (access.role === "owner" || pass.role !== "owner");
+      const canRevoke = !revoked && isOwner();
       return `
         <article class="admin-row ${revoked ? "is-revoked" : ""}">
           <div>
             <strong>${escapeHtml(pass.label)}</strong>
             <span>${escapeHtml(pass.email || "No Gmail set")}</span>
-            <span>${escapeHtml(pass.roleLabel)} pass - created ${fmtDate(pass.createdAt)}</span>
+            <span>Admin pass - created ${fmtDate(pass.createdAt)}</span>
             <span>Last used: ${fmtDate(pass.lastUsedAt)}</span>
           </div>
           <div class="admin-row-actions">
@@ -244,15 +228,13 @@ function bindEvents() {
         method: "POST",
         body: {
           label: qs("#passLabelInput").value.trim(),
-          email: qs("#passEmailInput").value.trim(),
-          role: qs("#passRoleInput").value
+          email: qs("#passEmailInput").value.trim()
         }
       });
       qs("#newPassBox").hidden = false;
       qs("#newPassCode").value = data.code;
       event.target.reset();
-      setRoleOptions();
-      showToast("Pass created.");
+      showToast("Admin pass created.");
       await loadDashboard();
     } catch (error) {
       showToast(error.message);

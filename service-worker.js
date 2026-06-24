@@ -1,9 +1,9 @@
-const CACHE_NAME = "lenslog-v16";
+const CACHE_NAME = "lenslog-v17";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=16",
-  "./app.js?v=16",
+  "./styles.css?v=17",
+  "./app.js?v=17",
   "./manifest.webmanifest",
   "./icon.svg"
 ];

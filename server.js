@@ -28,19 +28,11 @@ let passesQueue = Promise.resolve();
 const ROLE_DEFINITIONS = {
   owner: {
     label: "Owner",
-    permissions: ["viewAdmin", "moderatePosts", "managePasses", "issueOwner"]
+    permissions: ["viewAdmin", "moderatePosts", "managePasses"]
   },
   admin: {
     label: "Admin",
-    permissions: ["viewAdmin", "moderatePosts", "managePasses"]
-  },
-  moderator: {
-    label: "Moderator",
     permissions: ["viewAdmin", "moderatePosts"]
-  },
-  viewer: {
-    label: "Viewer",
-    permissions: ["viewAdmin"]
   }
 };
 
@@ -142,7 +134,7 @@ function adminPost(post) {
 }
 
 function roleDetails(role) {
-  return ROLE_DEFINITIONS[role] || ROLE_DEFINITIONS.viewer;
+  return ROLE_DEFINITIONS[role] || ROLE_DEFINITIONS.admin;
 }
 
 function publicAccess(access) {
@@ -193,11 +185,12 @@ function hasPermission(access, permission) {
   return Boolean(access && roleDetails(access.role).permissions.includes(permission));
 }
 
-function canIssueRole(access, targetRole) {
-  if (!access) return false;
-  if (access.role === "owner") return Boolean(ROLE_DEFINITIONS[targetRole]);
-  if (access.role === "admin") return targetRole === "moderator" || targetRole === "viewer";
-  return false;
+function canManagePasses(access) {
+  return Boolean(access && access.role === "owner");
+}
+
+function isUsableStoredPass(pass) {
+  return pass && pass.role === "admin" && !pass.revokedAt;
 }
 
 function visiblePosts(posts) {
@@ -536,7 +529,7 @@ async function authenticateSecret(secret, options = {}) {
 
   await withPassesLock(async () => {
     const passes = await readPasses();
-    const pass = passes.find((item) => item.codeHash === codeHash && !item.revokedAt);
+    const pass = passes.find((item) => item.codeHash === codeHash && isUsableStoredPass(item));
     if (!pass) return;
 
     if (options.touch) {
@@ -634,6 +627,10 @@ async function createAdminSession(request, response) {
 async function listAdminPasses(requestUrl, request, response) {
   const access = await requireAdmin(requestUrl, request, response, "managePasses");
   if (!access) return;
+  if (!canManagePasses(access)) {
+    sendJson(response, 403, { ok: false, error: "Only the owner can manage admin passes." });
+    return;
+  }
   const passes = await readPasses();
   sendJson(response, 200, { ok: true, access: publicAccess(access), passes: passes.map(publicPass) });
 }
@@ -641,16 +638,18 @@ async function listAdminPasses(requestUrl, request, response) {
 async function createAdminPass(requestUrl, request, response) {
   const access = await requireAdmin(requestUrl, request, response, "managePasses");
   if (!access) return;
+  if (!canManagePasses(access)) {
+    sendJson(response, 403, { ok: false, error: "Only the owner can give admin passes." });
+    return;
+  }
 
   try {
     const body = await readBody(request);
-    const role = cleanText(body.role, 20).toLowerCase() || "viewer";
+    const role = "admin";
     const label = cleanText(body.label, 80);
     const email = cleanEmail(body.email);
 
     if (!label) throw new Error("Add a name for this pass.");
-    if (!ROLE_DEFINITIONS[role]) throw new Error("Choose a valid pass type.");
-    if (!canIssueRole(access, role)) throw new Error("This pass cannot create that allowance level.");
 
     const code = generatePassCode();
     const pass = {
@@ -680,6 +679,10 @@ async function createAdminPass(requestUrl, request, response) {
 async function revokeAdminPass(requestUrl, request, response, passId) {
   const access = await requireAdmin(requestUrl, request, response, "managePasses");
   if (!access) return;
+  if (!canManagePasses(access)) {
+    sendJson(response, 403, { ok: false, error: "Only the owner can revoke admin passes." });
+    return;
+  }
 
   try {
     let revokedPass = null;
@@ -689,7 +692,6 @@ async function revokeAdminPass(requestUrl, request, response, passId) {
       const pass = passes.find((item) => item.id === passId);
       if (!pass) throw new Error("Pass not found.");
       if (pass.id === access.id) throw new Error("You cannot revoke the pass you are using.");
-      if (pass.role === "owner" && access.role !== "owner") throw new Error("Only the owner can revoke owner passes.");
 
       pass.revokedAt = pass.revokedAt || Date.now();
       pass.revokedBy = access.label;

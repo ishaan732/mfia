@@ -136,32 +136,41 @@ test("photo submissions are published, reported, and removable", async () => {
   assert.equal(ownerSession.status, 200);
   assert.equal(ownerSession.body.access.role, "owner");
 
-  const moderatorPass = await api("/api/admin/passes", {
+  const adminPass = await api("/api/admin/passes", {
     method: "POST",
     headers: { "X-Admin-Pass": "test-admin" },
     body: JSON.stringify({
-      label: "Test Moderator",
-      email: "mod@gmail.com",
-      role: "moderator"
+      label: "Test Admin",
+      email: "admin@gmail.com"
     })
   });
-  assert.equal(moderatorPass.status, 201);
-  assert.equal(moderatorPass.body.pass.role, "moderator");
-  assert.match(moderatorPass.body.code, /^LL-[a-f0-9]{4}/);
+  assert.equal(adminPass.status, 201);
+  assert.equal(adminPass.body.pass.role, "admin");
+  assert.match(adminPass.body.code, /^LL-[a-f0-9]{4}/);
 
-  const moderatorList = await api("/api/admin/posts", {
-    headers: { "X-Admin-Pass": moderatorPass.body.code }
+  const adminListWithPass = await api("/api/admin/posts", {
+    headers: { "X-Admin-Pass": adminPass.body.code }
   });
-  assert.equal(moderatorList.status, 200);
-  assert.equal(moderatorList.body.access.role, "moderator");
-  assert.equal(moderatorList.body.posts.length, 1);
+  assert.equal(adminListWithPass.status, 200);
+  assert.equal(adminListWithPass.body.access.role, "admin");
+  assert.equal(adminListWithPass.body.posts.length, 1);
 
-  const deniedPassList = await api("/api/admin/passes", {
-    headers: { "X-Admin-Pass": moderatorPass.body.code }
+  const deniedPassListForAdmin = await api("/api/admin/passes", {
+    headers: { "X-Admin-Pass": adminPass.body.code }
   });
-  assert.equal(deniedPassList.status, 403);
+  assert.equal(deniedPassListForAdmin.status, 403);
 
-  const revokedPass = await api(`/api/admin/passes/${moderatorPass.body.pass.id}`, {
+  const deniedPassCreateForAdmin = await api("/api/admin/passes", {
+    method: "POST",
+    headers: { "X-Admin-Pass": adminPass.body.code },
+    body: JSON.stringify({
+      label: "Not Allowed",
+      email: "nope@gmail.com"
+    })
+  });
+  assert.equal(deniedPassCreateForAdmin.status, 403);
+
+  const revokedPass = await api(`/api/admin/passes/${adminPass.body.pass.id}`, {
     method: "DELETE",
     headers: { "X-Admin-Pass": "test-admin" }
   });
@@ -170,7 +179,7 @@ test("photo submissions are published, reported, and removable", async () => {
 
   const revokedCannotEnter = await api("/api/admin/session", {
     method: "POST",
-    body: JSON.stringify({ passCode: moderatorPass.body.code })
+    body: JSON.stringify({ passCode: adminPass.body.code })
   });
   assert.equal(revokedCannotEnter.status, 403);
 
