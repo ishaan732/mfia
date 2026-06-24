@@ -927,6 +927,13 @@ dd {
   line-height: 1;
 }
 
+.admin-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 .admin-identity {
   display: flex;
   align-items: center;
@@ -1146,6 +1153,11 @@ dd {
 
   .admin-hero,
   .admin-panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-quick-actions {
     align-items: stretch;
     flex-direction: column;
   }

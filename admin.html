@@ -7,9 +7,9 @@
     <meta name="theme-color" content="#0f766e" />
     <title>LensLog Admin</title>
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=18" />
+    <link rel="stylesheet" href="./styles.css?v=19" />
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="./admin.js?v=18" defer></script>
+    <script src="./admin.js?v=19" defer></script>
   </head>
   <body class="admin-page">
     <header class="topbar">
@@ -22,6 +22,10 @@
         <a class="nav-tab" href="./index.html#feed">Feed</a>
       </nav>
       <div class="top-actions">
+        <a class="ghost-button" href="./index.html#share">
+          <i data-lucide="image-plus"></i>
+          Add photos
+        </a>
         <button class="ghost-button" id="forgetPass" type="button" hidden>
           <i data-lucide="log-out"></i>
           Forget pass
@@ -53,6 +57,16 @@
           <div>
             <p class="eyebrow">Control room</p>
             <h1>Admin passes and moderation</h1>
+            <div class="admin-quick-actions" aria-label="Quick actions">
+              <a class="primary-button" href="./index.html#share">
+                <i data-lucide="image-plus"></i>
+                Add photos
+              </a>
+              <a class="secondary-button" href="#adminPostList">
+                <i data-lucide="trash-2"></i>
+                Review/remove
+              </a>
+            </div>
           </div>
           <div class="admin-identity">
             <span class="avatar" id="adminAvatar">AD</span>
