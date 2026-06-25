@@ -360,7 +360,7 @@ textarea:focus {
   border-radius: 8px;
   background:
     linear-gradient(90deg, rgba(20, 22, 20, 0.83), rgba(20, 22, 20, 0.38)),
-    url("./assets/hero-photo.svg") center/cover;
+    url("./assets/real-pangong-lake.jpg") center/cover;
   color: #fffaf1;
   overflow: hidden;
 }

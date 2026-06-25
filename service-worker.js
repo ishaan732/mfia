@@ -1,15 +1,14 @@
-const CACHE_NAME = "lenslog-v22";
+const CACHE_NAME = "lenslog-v23";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=22",
-  "./app.js?v=22",
-  "./assets/hero-photo.svg",
+  "./styles.css?v=23",
+  "./app.js?v=23",
   "./assets/photo-fallback.svg",
-  "./assets/sample-street.svg",
-  "./assets/sample-landscape.svg",
-  "./assets/sample-portrait.svg",
-  "./assets/sample-wildlife.svg",
+  "./assets/real-street-rain.jpg",
+  "./assets/real-pangong-lake.jpg",
+  "./assets/real-window-portrait.jpg",
+  "./assets/real-heron-flight.jpg",
   "./manifest.webmanifest",
   "./icon.svg"
 ];
