@@ -2,6 +2,7 @@ const STORAGE_KEY = "lenslog-state-v1";
 const USER_ID_KEY = "lenslog-local-user-id";
 const MAX_SOURCE_IMAGE_BYTES = 18 * 1024 * 1024;
 const MAX_UPLOAD_SIDE = 1800;
+const PHOTO_FALLBACK = "./assets/photo-fallback.svg";
 const memoryStore = {};
 const uid = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -48,7 +49,7 @@ const samplePosts = [
     category: "Street",
     story: "I waited for the taxi headlights to hit the wet road and kept the frame low.",
     author: "Anaya Rao",
-    image: "https://images.unsplash.com/photo-1519413275793-7d0f5c4bf5d0?auto=format&fit=crop&w=1200&q=84",
+    image: "./assets/sample-street.svg",
     likes: 32,
     createdAt: Date.now() - 1000 * 60 * 60 * 3
   },
@@ -65,7 +66,7 @@ const samplePosts = [
     category: "Landscape",
     story: "The air was clear after sunset, so I underexposed a little to keep the mountain edges clean.",
     author: "Kabir Sen",
-    image: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=84",
+    image: "./assets/sample-landscape.svg",
     likes: 57,
     createdAt: Date.now() - 1000 * 60 * 60 * 10
   },
@@ -82,7 +83,7 @@ const samplePosts = [
     category: "Portrait",
     story: "Soft curtain light did most of the work. I focused on the near eye and kept the background simple.",
     author: "Meera Iyer",
-    image: "https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?auto=format&fit=crop&w=1200&q=84",
+    image: "./assets/sample-portrait.svg",
     likes: 44,
     createdAt: Date.now() - 1000 * 60 * 60 * 18
   },
@@ -99,7 +100,7 @@ const samplePosts = [
     category: "Wildlife",
     story: "Fast shutter, quiet mode, and a patient crouch near the reeds caught the takeoff.",
     author: "Dev Malhotra",
-    image: "https://images.unsplash.com/photo-1515705576963-95cad62945b6?auto=format&fit=crop&w=1200&q=84",
+    image: "./assets/sample-wildlife.svg",
     likes: 71,
     createdAt: Date.now() - 1000 * 60 * 60 * 24
   }
@@ -458,6 +459,10 @@ function renderMyShots() {
     const image = document.createElement("img");
     image.src = post.image;
     image.alt = post.title;
+    image.onerror = () => {
+      image.onerror = null;
+      image.src = PHOTO_FALLBACK;
+    };
 
     const body = document.createElement("div");
     const title = document.createElement("strong");
@@ -529,6 +534,10 @@ function renderPosts() {
     node.classList.toggle("new-post", post.id === newestPostId);
     node.querySelector(".photo").src = post.image;
     node.querySelector(".photo").alt = post.title;
+    node.querySelector(".photo").onerror = (event) => {
+      event.currentTarget.onerror = null;
+      event.currentTarget.src = PHOTO_FALLBACK;
+    };
     node.querySelector(".tag").textContent = isMine(post) ? `Yours - ${post.category}` : post.category;
     node.querySelector("h3").textContent = post.title;
     node.querySelector(".location").textContent = post.location;

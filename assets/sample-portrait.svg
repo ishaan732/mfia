@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-label="Portrait in window light">
+  <defs>
+    <linearGradient id="room" x1="0" x2="1">
+      <stop offset="0" stop-color="#f3d5a8"/><stop offset=".46" stop-color="#8b634e"/><stop offset="1" stop-color="#2b2425"/>
+    </linearGradient>
+    <radialGradient id="light" cx="24%" cy="36%" r="45%">
+      <stop offset="0" stop-color="#fff4da"/><stop offset="1" stop-color="#fff4da" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#room)"/>
+  <rect x="65" y="70" width="350" height="690" rx="18" fill="#f8ddb2" opacity=".86"/>
+  <rect x="115" y="116" width="96" height="590" fill="#fff8e8" opacity=".48"/>
+  <rect x="250" y="116" width="96" height="590" fill="#fff8e8" opacity=".38"/>
+  <rect width="1200" height="900" fill="url(#light)"/>
+  <ellipse cx="690" cy="806" rx="250" ry="70" fill="#171717" opacity=".3"/>
+  <path d="M505 780 C512 595 568 482 696 482 C825 482 880 594 892 780Z" fill="#1c2627"/>
+  <circle cx="698" cy="360" r="150" fill="#9a684e"/>
+  <path d="M545 325 C560 184 666 130 786 188 C874 231 895 337 850 434 C812 315 706 300 632 246 C600 295 584 330 545 325Z" fill="#1f1716"/>
+  <path d="M620 408 C682 462 742 462 800 408 C772 520 660 526 620 408Z" fill="#704836" opacity=".5"/>
+  <circle cx="642" cy="346" r="14" fill="#201918"/>
+  <circle cx="756" cy="346" r="14" fill="#201918"/>
+  <path d="M650 425 C688 452 731 452 768 425" fill="none" stroke="#3c2420" stroke-width="9" stroke-linecap="round"/>
+  <path d="M470 900 C500 720 590 640 700 640 C825 640 920 730 950 900Z" fill="#254247"/>
+</svg>
