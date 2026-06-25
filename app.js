@@ -122,6 +122,7 @@ const defaultState = {
 };
 
 const sampleSignatures = new Set(samplePosts.map((post) => `${post.title}|${post.author}`));
+const sampleImageByTitle = Object.fromEntries(samplePosts.map((post) => [post.title, post.image]));
 
 const qs = (selector) => document.querySelector(selector);
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -333,7 +334,8 @@ function migratePost(post, userId) {
     return {
       ...post,
       sample: true,
-      mine: false
+      mine: false,
+      image: sampleImageByTitle[post.title] || post.image || PHOTO_FALLBACK
     };
   }
 
@@ -784,7 +786,10 @@ function bindEvents() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   if (location.protocol !== "http:" && location.protocol !== "https:") return;
-  navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+  navigator.serviceWorker
+    .register("./service-worker.js")
+    .then((registration) => registration.update())
+    .catch(() => {});
 }
 
 function updateActiveNav() {
