@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /admin.html
+Disallow: /repair.html
 
 Sitemap: https://lenslog.onrender.com/sitemap.xml
